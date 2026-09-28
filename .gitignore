@@ -1,0 +1,31 @@
+# ─── Secretos: NUNCA subir ───────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# ─── Dependencias y builds ───────────────────────────────
+node_modules/
+dist/
+dev-dist/
+coverage/
+*.tsbuildinfo
+.vite/
+
+# ─── Supabase local ──────────────────────────────────────
+supabase/.branches/
+supabase/.temp/
+supabase/.env
+
+# ─── Vercel ──────────────────────────────────────────────
+.vercel/
+
+# ─── Editor / sistema ────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+.idea/
+.vscode/*
+!.vscode/extensions.json
