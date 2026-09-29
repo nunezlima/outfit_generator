@@ -227,6 +227,19 @@ npm run dev               # abre http://localhost:5173
 | `npm run typecheck` | Revisa tipos de TypeScript |
 | `npm run lint` | Revisión de estilo (oxlint) |
 | `npm run build` | Compila la versión de producción en `dist/` |
+| `node scripts/importar-inventario.mjs archivo.csv` | Muestra qué importaría de un inventario CSV (agrega `--aplicar` para escribirlo) |
+
+### Importar tu inventario desde un CSV
+
+El script `scripts/importar-inventario.mjs` carga muchas prendas de una vez
+(tipos, estilos, reglas de estilos y prendas). Entra con **tu** correo y
+contraseña y la clave pública, así que RLS aplica igual que en la app.
+
+1. Guarda tu CSV en `datos-privados/` (esa carpeta la ignora Git) o fuera del repo.
+2. `node scripts/importar-inventario.mjs datos-privados/inventario.csv` → muestra el plan sin escribir nada.
+3. Si el plan se ve bien, repite con `--aplicar`. Correrlo otra vez no duplica prendas.
+
+Las columnas esperadas están documentadas al inicio del script.
 
 ### Estructura
 

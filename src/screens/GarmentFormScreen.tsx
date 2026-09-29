@@ -7,18 +7,18 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useGarment } from '../data/hooks';
 import { createGarment, setGarmentPhoto, updateGarment, type GarmentDraft } from '../data/repo';
 import { PALETTE } from '../domain/colors';
-import { STATUS_LABELS, WARMTH_LABELS, type Garment, type GarmentStatus, type Warmth } from '../domain/types';
+import { CLIMATE_LABELS, STATUS_LABELS, WARMTH_LABELS, type Climate, type Garment, type GarmentStatus, type Warmth } from '../domain/types';
 import { useCatalogIndex } from '../ui/CatalogContext';
 import { Chip, Loading, NumberStepper, Page, Segmented } from '../ui/common';
 import { useFeedback } from '../ui/feedback';
 import { GarmentPhoto } from '../ui/GarmentViews';
 import { PhotoInput } from '../ui/PhotoInput';
 
-const EMPTY: GarmentDraft = { name: '', type_id: '', style_ids: [], color: null, warmth: 'medium', wash_after_uses: 1, status: 'available', notes: null };
+const EMPTY: GarmentDraft = { name: '', type_id: '', style_ids: [], color: null, warmth: 'medium', climate: 'all', wash_after_uses: 1, status: 'available', notes: null };
 
 function pickDraft(g: Garment): GarmentDraft {
   const { name, type_id, style_ids, color, warmth, wash_after_uses, status, notes } = g;
-  return { name, type_id, style_ids, color, warmth, wash_after_uses, status, notes };
+  return { name, type_id, style_ids, color, warmth, climate: g.climate ?? 'all', wash_after_uses, status, notes };
 }
 
 export function GarmentFormScreen() {
@@ -218,6 +218,17 @@ function GarmentForm({ existing }: { existing: Garment | null }) {
             onChange={(v) => set('warmth', v)}
             options={(Object.keys(WARMTH_LABELS) as Warmth[]).map((w) => ({ value: w, label: WARMTH_LABELS[w] }))}
           />
+        </div>
+
+        <div className="field">
+          <span className="label">Clima</span>
+          <Segmented<Climate>
+            label="Clima"
+            value={draft.climate}
+            onChange={(v) => set('climate', v)}
+            options={(Object.keys(CLIMATE_LABELS) as Climate[]).map((c) => ({ value: c, label: CLIMATE_LABELS[c] }))}
+          />
+          <span className="hint">“Todo el año” sale con cualquier clima; “Calor” y “Frío” solo en esos días.</span>
         </div>
 
         <div className="spread">

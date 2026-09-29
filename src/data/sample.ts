@@ -15,6 +15,7 @@ import { createPosition, createStyle, createType, deleteGarments, newId, saveRow
 
 const DEFAULT_POSITION_NAMES: Record<PositionRole, string> = {
   top: 'Parte superior',
+  mid: 'Capa intermedia',
   bottom: 'Parte inferior',
   full_body: 'Pieza completa',
   footwear: 'Calzado',
@@ -84,6 +85,7 @@ export async function loadSampleData(): Promise<number> {
       style_ids: styleIds,
       color: s.color,
       warmth: s.warmth,
+      climate: s.climate ?? 'all',
       wash_after_uses: s.wash,
       uses_since_wash: s.uses ?? 0,
       status: s.status ?? 'available',

@@ -63,7 +63,8 @@ futuro, actualiza también este archivo.
 
 | Rol | Comportamiento |
 |---|---|
-| `top` (parte superior) | Obligatoria, salvo que haya pieza completa. |
+| `top` (parte superior) | Obligatoria, salvo que haya pieza completa o que la capa intermedia vaya sola. |
+| `mid` (capa intermedia) | Opcional, 0 o 1, más probable con frío. Puede ir sola en el torso. |
 | `bottom` (parte inferior) | Obligatoria, salvo que haya pieza completa. |
 | `full_body` (pieza completa) | Alternativa a superior + inferior (vestido, overol, traje de baño). |
 | `footwear` (calzado) | Obligatoria. |
@@ -197,13 +198,15 @@ prendas/tipos/estilos excluidos, estilo objetivo, clima, prendas fijadas
 - Estado distinto de *disponible* → fuera (cesto / archivada).
 - Prenda, tipo o todos sus estilos deseleccionados → fuera.
 - Estilo objetivo: la prenda debe tenerlo.
-- Clima (según nivel de abrigo):
+- Clima (según el campo `climate` de cada prenda: calor, todo el año o frío).
+  El nivel de abrigo ya no filtra: solo describe la capa.
 
-| Clima | Regla |
-|---|---|
-| Calor | Sin prendas abrigadoras; sin capa exterior. |
-| Templado | Sin prendas abrigadoras; capa exterior opcional. |
-| Frío | Sin prendas ligeras en inferior, pieza completa, calzado y capa exterior; capa exterior incluida si hay. |
+| Clima del día | Prendas que participan | Capas |
+|---|---|---|
+| Calor | calor + todo el año | sin capa intermedia ni exterior |
+| Templado | solo todo el año | intermedia 40 %, exterior 50 % |
+| Frío | frío + todo el año | intermedia 85 %, exterior 100 % |
+| Sin clima | todas | intermedia 35 %, exterior 35 % |
 
 Las prendas **fijadas** se saltan estos filtros (las elegiste tú), pero deben
 estar disponibles y ser compatibles con el resto.
@@ -212,9 +215,13 @@ estar disponibles y ser compatibles con el resto.
 `superior + inferior + calzado` o `pieza completa + calzado`. Si hay una prenda
 fijada decide la estructura; si no, se sortea con probabilidad proporcional a
 la cantidad de candidatas de cada opción, y si una falla se intenta la otra.
-Luego se deciden las opcionales: capa exterior (frío 100 %, templado 50 %,
-sin clima 35 %, calor 0 %), posiciones `extra` (35 %), y cuántos accesorios
-(0–`max_items`).
+**Torso en capas** (rol `mid`, "Capa intermedia": suéteres, sudaderas,
+sobrecamisas). Si entra la capa intermedia (probabilidad según el clima, tabla
+de arriba), en el 35 % de los casos va **sola** en el torso, sin prenda ligera
+debajo; si no hay prendas ligeras disponibles, va sola siempre. Sobre una
+pieza completa también puede entrar, como opcional.
+Luego se deciden las demás opcionales: capa exterior (según el clima),
+posiciones `extra` (35 %), y cuántos accesorios (0–`max_items`).
 
 ### Paso 3 — Búsqueda con retroceso (backtracking)
 Se llenan primero las fijadas, luego las obligatorias con menos candidatas

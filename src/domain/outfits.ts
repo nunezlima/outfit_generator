@@ -53,7 +53,7 @@ export function validateOutfit(garments: Garment[], catalog: Catalog): OutfitWar
   const hasFull = (byRole.get('full_body') ?? 0) > 0;
   const has = (role: PositionRole) => catalog.positions.some((p) => p.role === role);
   if (!hasFull) {
-    if (has('top') && !byRole.get('top')) structure.push('Falta la parte superior (o una pieza completa).');
+    if (has('top') && !byRole.get('top') && !byRole.get('mid')) structure.push('Falta la parte superior (o una pieza completa).');
     if (has('bottom') && !byRole.get('bottom')) structure.push('Falta la parte inferior (o una pieza completa).');
   } else if (byRole.get('top') || byRole.get('bottom')) {
     structure.push('Tiene pieza completa y además parte superior o inferior.');
