@@ -5,8 +5,8 @@
 //   1. Filtrar candidatas por posición, guardando POR QUÉ se descarta cada
 //      prenda (cesto, archivada, deseleccionada, estilo objetivo, clima).
 //   2. Elegir la estructura: superior + inferior, o pieza completa.
-//   3. Decidir qué opcionales entran (capa exterior según clima, extras,
-//      cuántos accesorios).
+//   3. Decidir las capas del torso (ligera, intermedia o ambas) y qué
+//      opcionales entran (capa exterior según clima, extras, accesorios).
 //   4. Búsqueda con retroceso: llenar posiciones (primero las más difíciles)
 //      probando candidatas en orden aleatorio PONDERADO; si una elección deja
 //      sin salida a una posición obligatoria posterior, se deshace y se prueba
@@ -24,12 +24,12 @@ import { defaultRng, weightedPick, weightedShuffle, type Rng } from './random';
 import {
   WEATHER_LABELS,
   type Catalog,
+  type Climate,
   type Garment,
   type GeneratorFilters,
   type Position,
   type PositionRole,
   type UUID,
-  type Warmth,
   type Weather,
 } from './types';
 
@@ -89,21 +89,28 @@ export interface GenerateOptions {
 
 // ─── Reglas fijas ───────────────────────────────────────────────────────────
 
-const REQUIRED_CORE: PositionRole[] = ['top', 'bottom'];
+/** Posiciones que forman "parte superior + parte inferior". */
+const CORE_ROLES: PositionRole[] = ['top', 'mid', 'bottom'];
 const MAX_SEARCH_STEPS = 20_000;
+/** Si entra la capa intermedia, probabilidad de que vaya sola (sin prenda ligera debajo). */
+const MID_ALONE_CHANCE = 0.35;
 
-/** ¿Esta prenda sirve para este clima según su nivel de abrigo? */
-export function weatherAllows(role: PositionRole, warmth: Warmth, weather: Weather | null): boolean {
+/**
+ * ¿Esta prenda sirve para el clima del día?
+ *   calor    → prendas de calor y de todo el año
+ *   templado → solo prendas de todo el año
+ *   frío     → prendas de frío y de todo el año
+ * Filas antiguas sin clima cuentan como "todo el año".
+ */
+export function weatherAllows(climate: Climate | null | undefined, weather: Weather | null): boolean {
+  const c = climate ?? 'all';
   switch (weather) {
     case 'hot':
-      // Nada abrigador y sin capa exterior.
-      return role !== 'outer' && warmth !== 'warm';
+      return c !== 'cold';
     case 'mild':
-      return warmth !== 'warm';
+      return c === 'all';
     case 'cold':
-      // Nada ligero abajo, en los pies ni como capa exterior. Arriba sí se
-      // permite (una camiseta bajo una chamarra es normal).
-      return !(warmth === 'light' && (role === 'bottom' || role === 'full_body' || role === 'footwear' || role === 'outer'));
+      return c !== 'hot';
     default:
       return true;
   }
@@ -114,6 +121,12 @@ function optionalChance(role: PositionRole, weather: Weather | null): number {
   if (role === 'outer') {
     if (weather === 'cold') return 1;
     if (weather === 'mild') return 0.5;
+    if (weather === 'hot') return 0;
+    return 0.35;
+  }
+  if (role === 'mid') {
+    if (weather === 'cold') return 0.85;
+    if (weather === 'mild') return 0.4;
     if (weather === 'hot') return 0;
     return 0.35;
   }
@@ -171,7 +184,7 @@ interface Prepared {
   total: Map<UUID, number>;
 }
 
-function exclusionReason(g: Garment, pos: Position, filters: GeneratorFilters, compat: CompatIndex): ExclusionReason | null {
+function exclusionReason(g: Garment, filters: GeneratorFilters, compat: CompatIndex): ExclusionReason | null {
   if (g.status === 'archived') return 'archived';
   if (g.status === 'laundry') return 'laundry';
   if (filters.excludedGarmentIds.includes(g.id)) return 'excluded_garment';
@@ -179,7 +192,7 @@ function exclusionReason(g: Garment, pos: Position, filters: GeneratorFilters, c
   const effective = compat.effectiveStyles(g);
   if (compat.knownStyles(g).length > 0 && effective.length === 0) return 'excluded_style';
   if (filters.targetStyleId && effective.length > 0 && !effective.includes(filters.targetStyleId)) return 'target_style';
-  if (!weatherAllows(pos.role, g.warmth, filters.weather)) return 'weather';
+  if (!weatherAllows(g.climate, filters.weather)) return 'weather';
   return null;
 }
 
@@ -205,7 +218,7 @@ function prepare(ctx: GeneratorContext): Prepared {
     if (!pos) continue;
     positionOfGarment.set(g.id, pos);
     total.set(pos.id, (total.get(pos.id) ?? 0) + 1);
-    const reason = exclusionReason(g, pos, ctx.filters, compat);
+    const reason = exclusionReason(g, ctx.filters, compat);
     if (reason) {
       const counts = excluded.get(pos.id)!;
       counts[reason] = (counts[reason] ?? 0) + 1;
@@ -297,10 +310,11 @@ export function generateOutfit(ctx: GeneratorContext, options: GenerateOptions =
     };
   }
 
-  const core = positionsWithRole(prep, ...REQUIRED_CORE);
+  const core = positionsWithRole(prep, ...CORE_ROLES);
   const fulls = positionsWithRole(prep, 'full_body');
   const pinnedFull = fulls.filter((p) => pinsByPosition.has(p.id));
-  const pinnedCore = core.filter((p) => pinsByPosition.has(p.id));
+  // La capa intermedia puede ir sobre una pieza completa; no cuenta como conflicto.
+  const pinnedCore = core.filter((p) => p.role !== 'mid' && pinsByPosition.has(p.id));
 
   if (pinnedFull.length > 0 && pinnedCore.length > 0) {
     return {
@@ -313,7 +327,12 @@ export function generateOutfit(ctx: GeneratorContext, options: GenerateOptions =
 
   // ── Qué estructuras son posibles y en qué orden probarlas ──
   const count = (p: Position) => (pinsByPosition.get(p.id)?.length ?? 0) + prep.eligible.get(p.id)!.length;
-  const separatesFeasible = core.length > 0 && core.every((p) => count(p) > 0);
+  // Torso = parte superior o capa intermedia (cualquiera basta); cada inferior es obligatoria.
+  const torso = core.filter((p) => p.role !== 'bottom');
+  const bottoms = core.filter((p) => p.role === 'bottom');
+  const torsoCount = torso.reduce((s, p) => s + count(p), 0);
+  const coreCounts = [...bottoms.map(count), ...(torso.length > 0 ? [torsoCount] : [])];
+  const separatesFeasible = coreCounts.length > 0 && coreCounts.every((n) => n > 0);
   const fullCandidates = fulls.filter((p) => count(p) > 0);
   let order: Structure[];
   if (core.length === 0 && fulls.length === 0) order = ['none'];
@@ -321,7 +340,7 @@ export function generateOutfit(ctx: GeneratorContext, options: GenerateOptions =
   else if (pinnedCore.length > 0) order = ['separates'];
   else {
     // Sorteo proporcional: pesa la posición más escasa de cada opción.
-    const wSep = separatesFeasible ? Math.min(...core.map(count)) : 0;
+    const wSep = separatesFeasible ? Math.min(...coreCounts) : 0;
     const wFull = fullCandidates.reduce((s, p) => s + count(p), 0);
     if (wSep > 0 && wFull > 0) order = rng() * (wSep + wFull) < wFull ? ['full', 'separates'] : ['separates', 'full'];
     else if (wFull > 0) order = ['full', 'separates'];
@@ -373,8 +392,34 @@ function buildSlots(
   const has = (p: Position) => (pinsByPosition.get(p.id)?.length ?? 0) > 0 || prep.eligible.get(p.id)!.length > 0;
 
   const required: Position[] = [];
-  if (structure === 'separates') required.push(...positionsWithRole(prep, ...REQUIRED_CORE));
+  const optionalMids: Position[] = [];
+  const mids = positionsWithRole(prep, 'mid');
+  const pinnedMids = mids.filter((p) => pinsByPosition.has(p.id));
+  const availMids = mids.filter(has);
+  // ¿Entra la capa intermedia? Fijada → sí; si no, según el clima.
+  const wantMid = (): boolean => pinnedMids.length > 0 || (availMids.length > 0 && rng() < optionalChance('mid', weather));
+  const midChoice = (): Position | undefined => pinnedMids[0] ?? weightedPick(availMids, (p) => prep.eligible.get(p.id)!.length, rng) ?? undefined;
+
+  if (structure === 'separates') {
+    const tops = positionsWithRole(prep, 'top');
+    const pinnedTop = tops.some((p) => pinsByPosition.has(p.id));
+    const topAvail = tops.some(has);
+    // Sin prendas ligeras disponibles, la capa intermedia tiene que ir sí o sí.
+    const includeMid = mids.length > 0 && (wantMid() || (!topAvail && availMids.length + pinnedMids.length > 0));
+    const mid = includeMid ? midChoice() : undefined;
+    const midAlone = !!mid && !pinnedTop && (!topAvail || rng() < MID_ALONE_CHANCE);
+    if (midAlone) required.push(mid!);
+    else {
+      required.push(...tops);
+      if (mid) optionalMids.push(mid);
+    }
+    required.push(...positionsWithRole(prep, 'bottom'));
+  }
   if (structure === 'full') {
+    if (wantMid()) {
+      const mid = midChoice();
+      if (mid) optionalMids.push(mid);
+    }
     const fulls = positionsWithRole(prep, 'full_body');
     const pinned = fulls.find((p) => pinsByPosition.has(p.id));
     const withCands = fulls.filter(has);
@@ -387,6 +432,7 @@ function buildSlots(
   if (empty.length > 0) return emptyPositionsFailure(prep, empty);
 
   for (const p of required) slots.push({ position: p, required: true });
+  for (const p of optionalMids) slots.push({ position: p, required: false });
 
   // Opcionales: si hay algo fijado ahí, entran sí o sí.
   for (const p of prep.positions) {
@@ -539,7 +585,7 @@ const REASON_HINT: Record<ExclusionReason, (prep: Prepared) => string> = {
   excluded_type: () => 'Vuelve a incluir tipos en "Prendas participantes".',
   excluded_style: () => 'Vuelve a incluir estilos en "Prendas participantes".',
   target_style: (prep) => `Quita el estilo objetivo o agrega el estilo ${prep.compat.styleName(prep.ctx.filters.targetStyleId ?? '')} a más prendas.`,
-  weather: () => 'Cambia el clima o ajusta el nivel de abrigo de tus prendas.',
+  weather: () => 'Cambia el clima del generador o ajusta el clima de tus prendas.',
 };
 
 function emptyPositionsFailure(prep: Prepared, empty: Position[]): GenerationFailure {

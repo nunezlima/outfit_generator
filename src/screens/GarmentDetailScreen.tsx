@@ -10,7 +10,7 @@ import { getColor } from '../domain/colors';
 import { CompatIndex, orderedPair, type PairVerdict } from '../domain/compat';
 import { formatLongDate, relativeDays } from '../domain/dates';
 import { usesLeft } from '../domain/laundry';
-import { STATUS_LABELS, WARMTH_LABELS, type Garment } from '../domain/types';
+import { CLIMATE_LABELS, STATUS_LABELS, WARMTH_LABELS, type Garment } from '../domain/types';
 import { useCatalogIndex } from '../ui/CatalogContext';
 import { EmptyState, Loading, Page, SearchInput, Segmented, Tabs, normalize } from '../ui/common';
 import { useFeedback } from '../ui/feedback';
@@ -108,6 +108,8 @@ function InfoTab({ g }: { g: Garment }) {
         </dd>
         <dt>Abrigo</dt>
         <dd>{WARMTH_LABELS[g.warmth]}</dd>
+        <dt>Clima</dt>
+        <dd>{CLIMATE_LABELS[g.climate ?? 'all']}</dd>
         <dt>Lavado</dt>
         <dd>
           {left === null ? 'No va al cesto automáticamente' : `${g.uses_since_wash} de ${g.wash_after_uses} usos (${left === 0 ? 'toca lavar' : `faltan ${left}`})`}

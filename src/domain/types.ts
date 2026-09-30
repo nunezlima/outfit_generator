@@ -6,11 +6,13 @@ export type ISODate = string; // 'YYYY-MM-DD'
 export type ISODateTime = string; // timestamptz en ISO 8601
 
 /** Rol de una posición: le dice al generador cómo tratarla (ver DISENO.md §2). */
-export type PositionRole = 'top' | 'bottom' | 'full_body' | 'outer' | 'footwear' | 'accessory' | 'extra';
+export type PositionRole = 'top' | 'mid' | 'bottom' | 'full_body' | 'outer' | 'footwear' | 'accessory' | 'extra';
 
 export type Warmth = 'light' | 'medium' | 'warm';
 export type GarmentStatus = 'available' | 'laundry' | 'archived';
 export type Weather = 'hot' | 'mild' | 'cold';
+/** Clima en el que se usa una prenda: 'all' = todo el año. */
+export type Climate = 'hot' | 'all' | 'cold';
 export type EventKind = 'shown' | 'reject_strong' | 'reject_weak';
 
 /** Columnas comunes a todas las tablas sincronizadas. */
@@ -51,6 +53,8 @@ export interface Garment extends SyncedRow {
   style_ids: UUID[];
   color: string | null;
   warmth: Warmth;
+  /** Temporada de la prenda. Filas viejas sin este campo cuentan como 'all'. */
+  climate: Climate;
   /** 0 = nunca va al cesto automáticamente. */
   wash_after_uses: number;
   uses_since_wash: number;
@@ -165,7 +169,8 @@ export interface Catalog {
 }
 
 export const ROLE_LABELS: Record<PositionRole, string> = {
-  top: 'Parte superior (obligatoria)',
+  top: 'Parte superior (obligatoria, salvo que vaya sola la capa intermedia)',
+  mid: 'Capa intermedia (opcional; puede ir sola arriba)',
   bottom: 'Parte inferior (obligatoria)',
   full_body: 'Pieza completa (sustituye superior e inferior)',
   footwear: 'Calzado (obligatorio)',
@@ -178,6 +183,12 @@ export const WARMTH_LABELS: Record<Warmth, string> = {
   light: 'Ligera',
   medium: 'Media',
   warm: 'Abrigadora',
+};
+
+export const CLIMATE_LABELS: Record<Climate, string> = {
+  hot: 'Calor',
+  all: 'Todo el año',
+  cold: 'Frío',
 };
 
 export const STATUS_LABELS: Record<GarmentStatus, string> = {

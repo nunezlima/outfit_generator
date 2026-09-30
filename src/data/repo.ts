@@ -38,6 +38,8 @@ export async function saveRows<T extends TableName>(table: T, rows: RowByTable[T
   const t = db.table(table);
   const stamp = nowISO();
   const prepared: AnyRow[] = rows.map((r) => ({ ...(r as unknown as AnyRow), updated_at: stamp }));
+  // Prendas creadas antes de que existiera el campo "clima": todo el año.
+  if (table === 'garments') for (const r of prepared) r.climate ??= 'all';
   await db.transaction('rw', t, db.outbox, async () => {
     const alive = prepared.filter((r) => !r.deleted_at);
     const dead = prepared.filter((r) => r.deleted_at).map((r) => localKeyOf(table, r));
@@ -61,7 +63,7 @@ function baseRow() {
 
 // ─── Prendas ───────────────────────────────────────────────────────────────
 
-export type GarmentDraft = Pick<Garment, 'name' | 'type_id' | 'style_ids' | 'color' | 'warmth' | 'wash_after_uses' | 'status' | 'notes'>;
+export type GarmentDraft = Pick<Garment, 'name' | 'type_id' | 'style_ids' | 'color' | 'warmth' | 'climate' | 'wash_after_uses' | 'status' | 'notes'>;
 
 export async function createGarment(draft: GarmentDraft, photo?: Blob | null): Promise<Garment> {
   const id = newId();

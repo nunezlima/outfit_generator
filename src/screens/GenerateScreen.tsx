@@ -168,12 +168,14 @@ function Generator({ garments }: { garments: Garment[] }) {
   const hasFull = items.some((i) => idx.positionById.get(i.positionId)?.role === 'full_body');
   const addable = idx.catalog.positions.filter((p) => {
     const n = items.filter((i) => i.positionId === p.id).length;
-    if (p.role === 'outer' || p.role === 'extra') return n === 0;
+    if (p.role === 'outer' || p.role === 'extra' || p.role === 'mid') return n === 0;
+    // Si la capa intermedia va sola, se puede agregar una prenda ligera debajo.
+    if (p.role === 'top') return n === 0 && !hasFull;
     if (p.role === 'accessory') return n < p.max_items;
     return false;
   });
   const advice = colorAdvice(ids.map((id) => byId.get(id)?.color));
-  const isOptional = (p?: Position) => !!p && (p.role === 'outer' || p.role === 'extra' || p.role === 'accessory');
+  const isOptional = (p?: Position) => !!p && (p.role === 'outer' || p.role === 'extra' || p.role === 'mid' || p.role === 'accessory');
 
   return (
     <div className="stack">
@@ -277,7 +279,9 @@ function Generator({ garments }: { garments: Garment[] }) {
 }
 
 function defaultName(items: OutfitItem[], byId: Map<string, Garment>, positions: Map<string, Position>): string {
-  const main = items.find((i) => ['top', 'full_body'].includes(positions.get(i.positionId)?.role ?? ''));
+  const main =
+    items.find((i) => ['top', 'full_body'].includes(positions.get(i.positionId)?.role ?? '')) ??
+    items.find((i) => positions.get(i.positionId)?.role === 'mid');
   const g = main ? byId.get(main.garmentId) : undefined;
   return g ? `Con ${g.name.charAt(0).toLocaleLowerCase('es')}${g.name.slice(1)}` : 'Mi outfit';
 }

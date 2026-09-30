@@ -87,34 +87,45 @@ describe('generador de outfits', () => {
     }
   });
 
-  it('clima calor: nada abrigador ni capa exterior', () => {
+  it('clima calor: nada de frío ni capa exterior', () => {
     for (let seed = 1; seed <= 40; seed++) {
       const r = ok(generateOutfit(ctx(wardrobe, { weather: 'hot' }, seed)));
       for (const it of r.items) {
         const g = byId.get(it.garmentId)!;
-        expect(g.warmth).not.toBe('warm');
+        expect(g.climate).not.toBe('cold');
         expect(roleOf(g)).not.toBe('outer');
       }
     }
   });
 
-  it('clima frío: incluye capa exterior y nada ligero abajo ni en los pies', () => {
+  it('clima templado: solo prendas de todo el año', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const r = ok(generateOutfit(ctx(wardrobe, { weather: 'mild' }, seed)));
+      for (const it of r.items) expect(byId.get(it.garmentId)!.climate).toBe('all');
+    }
+  });
+
+  it('clima frío: incluye capa exterior y nada de calor', () => {
     for (let seed = 1; seed <= 40; seed++) {
       const r = ok(generateOutfit(ctx(wardrobe, { weather: 'cold' }, seed)));
       const gs = r.items.map((i) => byId.get(i.garmentId)!);
       expect(gs.some((g) => roleOf(g) === 'outer')).toBe(true);
-      for (const g of gs) {
-        if (['bottom', 'footwear', 'full_body', 'outer'].includes(roleOf(g))) expect(g.warmth).not.toBe('light');
-      }
+      for (const g of gs) expect(g.climate).not.toBe('hot');
     }
   });
 
-  it('weatherAllows sigue la tabla del diseño', () => {
-    expect(weatherAllows('outer', 'light', 'hot')).toBe(false);
-    expect(weatherAllows('top', 'warm', 'mild')).toBe(false);
-    expect(weatherAllows('top', 'light', 'cold')).toBe(true);
-    expect(weatherAllows('footwear', 'light', 'cold')).toBe(false);
-    expect(weatherAllows('outer', 'warm', null)).toBe(true);
+  it('weatherAllows: calor/frío + todo el año; templado solo todo el año', () => {
+    expect(weatherAllows('hot', 'hot')).toBe(true);
+    expect(weatherAllows('all', 'hot')).toBe(true);
+    expect(weatherAllows('cold', 'hot')).toBe(false);
+    expect(weatherAllows('all', 'mild')).toBe(true);
+    expect(weatherAllows('hot', 'mild')).toBe(false);
+    expect(weatherAllows('cold', 'mild')).toBe(false);
+    expect(weatherAllows('cold', 'cold')).toBe(true);
+    expect(weatherAllows('hot', 'cold')).toBe(false);
+    expect(weatherAllows('cold', null)).toBe(true);
+    // Filas antiguas sin clima = todo el año
+    expect(weatherAllows(undefined, 'mild')).toBe(true);
   });
 
   it('los estilos deseleccionados quitan prendas que solo tenían esos estilos', () => {

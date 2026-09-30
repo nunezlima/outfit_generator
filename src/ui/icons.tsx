@@ -24,6 +24,7 @@ export function DressIcon(props: LucideProps) {
 
 export const ROLE_ICON: Record<PositionRole, ComponentType<LucideProps>> = {
   top: Shirt,
+  mid: Layers2,
   outer: Layers,
   bottom: PantsIcon,
   full_body: DressIcon,

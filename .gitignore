@@ -5,6 +5,10 @@
 *.pem
 *.key
 
+# ─── Datos personales (inventarios para importar) ───────
+datos-privados/
+inventario*.csv
+
 # ─── Dependencias y builds ───────────────────────────────
 node_modules/
 dist/

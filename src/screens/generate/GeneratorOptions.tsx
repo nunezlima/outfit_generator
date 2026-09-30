@@ -98,10 +98,10 @@ export function GeneratorOptions({ garments }: { garments: Garment[] }) {
                 const Icon = WEATHER_ICON[f.weather];
                 return <Icon width={14} />;
               })()}
-              {f.weather === 'hot' && 'Sin prendas abrigadoras ni capa exterior.'}
-              {f.weather === 'mild' && 'Sin prendas abrigadoras; capa exterior opcional.'}
-              {f.weather === 'cold' && 'Nada ligero abajo ni en los pies; se agrega capa exterior.'}
-              {!f.weather && 'No filtra por nivel de abrigo.'}
+              {f.weather === 'hot' && 'Prendas de calor y de todo el año; sin capas encima.'}
+              {f.weather === 'mild' && 'Solo prendas de todo el año; capas opcionales.'}
+              {f.weather === 'cold' && 'Prendas de frío y de todo el año; se agregan capas.'}
+              {!f.weather && 'No filtra por clima.'}
             </span>
           </div>
           <button type="button" className="btn block" onClick={() => setParticipants(true)}>
