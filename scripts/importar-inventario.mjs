@@ -93,7 +93,7 @@ const INCOMPATIBLE = [
 
 const CLIMATE = { calor: 'hot', templado: 'all', frio: 'cold', 'frío': 'cold' };
 const WARMTH = { ligero: 'light', medio: 'medium', abrigador: 'warm' };
-const COLORS = new Set(['negro', 'blanco', 'gris', 'gris_oscuro', 'beige', 'cafe', 'caqui', 'azul_marino', 'mezclilla', 'verde_olivo', 'rojo', 'vino', 'rosa', 'morado', 'azul', 'celeste', 'turquesa', 'verde', 'amarillo', 'mostaza', 'naranja', 'multicolor']);
+const COLORS = new Set(['negro', 'blanco', 'gris', 'plateado', 'gris_oscuro', 'beige', 'cafe', 'cafe_claro', 'caqui', 'azul_marino', 'mezclilla', 'verde_olivo', 'rojo', 'ladrillo', 'vino', 'rosa', 'lila', 'morado', 'azul', 'celeste', 'turquesa', 'menta', 'verde', 'verde_bandera', 'amarillo', 'mostaza', 'naranja', 'multicolor']);
 
 // ─── Utilidades ────────────────────────────────────────────────────────────
 
