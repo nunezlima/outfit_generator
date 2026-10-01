@@ -4,6 +4,7 @@
 import { Ban, Check, Plus, Save, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { wardrobePath } from '../app/wardrobeView';
 import { useGarment } from '../data/hooks';
 import { createGarment, setGarmentPhoto, updateGarment, type GarmentDraft } from '../data/repo';
 import { PALETTE } from '../domain/colors';
@@ -25,7 +26,7 @@ export function GarmentFormScreen() {
   const { id } = useParams();
   const existing = useGarment(id);
   if (id && existing === undefined) return <Loading />;
-  if (id && existing === null) return <Page title="Prenda" back="/guardarropa"><p className="muted">Esta prenda ya no existe.</p></Page>;
+  if (id && existing === null) return <Page title="Prenda" back={wardrobePath()}><p className="muted">Esta prenda ya no existe.</p></Page>;
   return <GarmentForm key={id ?? 'new'} existing={existing ?? null} />;
 }
 
