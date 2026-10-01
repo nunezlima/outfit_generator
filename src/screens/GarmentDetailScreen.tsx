@@ -3,6 +3,7 @@
 import { Archive, ArchiveRestore, Check, CircleSlash, Pencil, RotateCcw, Sparkles, Trash2, WashingMachine, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { wardrobePath } from '../app/wardrobeView';
 import { useGeneratorState } from '../app/generatorState';
 import { useGarment, useGarments, useOutfits, usePrefs, useUsage } from '../data/hooks';
 import { deleteGarments, resetGarmentStats, setGarmentRule, setStatus, washGarments } from '../data/repo';
@@ -26,14 +27,14 @@ export function GarmentDetailScreen() {
   if (garment === undefined) return <Loading />;
   if (garment === null)
     return (
-      <Page title="Prenda" back="/guardarropa">
+      <Page title="Prenda" back={wardrobePath()}>
         <EmptyState icon={<CircleSlash />} title="Esta prenda ya no existe" />
       </Page>
     );
   return (
     <Page
       title={garment.name}
-      back="/guardarropa"
+      back={wardrobePath()}
       actions={
         <Link to={`/guardarropa/${garment.id}/editar`} className="icon-btn" aria-label="Editar">
           <Pencil />
@@ -76,7 +77,7 @@ function InfoTab({ g }: { g: Garment }) {
     if (!ok) return;
     await deleteGarments([g]);
     toast('Prenda eliminada');
-    navigate('/guardarropa', { replace: true });
+    navigate(wardrobePath(), { replace: true });
   };
 
   return (
