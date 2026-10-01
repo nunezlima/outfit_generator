@@ -14,6 +14,13 @@ describe('sugerencias de color', () => {
     expect(colorAdvice(['azul', 'celeste', 'blanco']).tone).toBe('good');
     expect(colorAdvice(['rojo', 'verde', 'amarillo']).tone).toBe('warn');
   });
+  it('colores agregados: neutros nuevos y vecinos', () => {
+    expect(colorsClash('plateado', 'rosa')).toBe(false);
+    expect(colorsClash('cafe_claro', 'lila')).toBe(false);
+    expect(colorsClash('turquesa', 'menta')).toBe(false);
+    expect(colorsClash('verde', 'verde_bandera')).toBe(false);
+    expect(colorsClash('ladrillo', 'rojo')).toBe(false);
+  });
   it('sin colores no opina', () => {
     expect(colorAdvice([null, undefined]).tone).toBe('none');
   });
