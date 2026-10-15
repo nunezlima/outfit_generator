@@ -1,12 +1,14 @@
 // Ficha de prenda: datos, con qué combina (y excepciones) y estadísticas.
 
-import { Archive, ArchiveRestore, Check, CircleSlash, Pencil, RotateCcw, Sparkles, Trash2, WashingMachine, X } from 'lucide-react';
+import { Archive, ArchiveRestore, Check, CheckSquare, CircleSlash, Pencil, RotateCcw, Sparkles, Trash2, WashingMachine, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { wardrobePath } from '../app/wardrobeView';
+import { useWardrobeAnalysis } from '../app/analysisHook';
 import { useGeneratorState } from '../app/generatorState';
-import { useGarment, useGarments, useOutfits, usePrefs, useUsage } from '../data/hooks';
-import { deleteGarments, resetGarmentStats, setGarmentRule, setStatus, washGarments } from '../data/repo';
+import { useGarment, useGarments, useOutfits, useUsage } from '../data/hooks';
+import { deleteGarments, resetGarmentStats, setGarmentRule, setGarmentRules, setStatus, washGarments } from '../data/repo';
+import { formatExpected } from '../domain/analysis';
 import { getColor } from '../domain/colors';
 import { CompatIndex, orderedPair, type PairVerdict } from '../domain/compat';
 import { formatLongDate, relativeDays } from '../domain/dates';
@@ -185,6 +187,10 @@ function CompatTab({ g }: { g: Garment }) {
   const [filter, setFilter] = useState<CompatFilter>('all');
   const [q, setQ] = useState('');
   const [editing, setEditing] = useState<{ other: Garment; verdict: PairVerdict } | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [busy, setBusy] = useState(false);
+  const { toast } = useFeedback();
   const compat = useMemo(() => new CompatIndex(idx.catalog), [idx.catalog]);
   const myPos = idx.positionOfType(g.type_id);
 
@@ -205,12 +211,64 @@ function CompatTab({ g }: { g: Garment }) {
       .filter((grp) => grp.rows.length > 0);
   }, [garments, g, compat, filter, q, idx, myPos]);
 
+  const toggle = (id: string) =>
+    setSelected((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const toggleAll = (ids: string[]) =>
+    setSelected((cur) => {
+      const next = new Set(cur);
+      const all = ids.every((id) => next.has(id));
+      for (const id of ids) {
+        if (all) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
+  const exitSelection = () => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
+
+  const applyBulk = async (allowed: boolean | null) => {
+    if (busy || selected.size === 0) return;
+    setBusy(true);
+    try {
+      const previous = await setGarmentRules([...selected].map((id) => ({ a: g.id, b: id, allowed })));
+      const n = previous.length;
+      const what = allowed === null ? 'quedan según las reglas' : allowed ? 'ahora siempre combinan' : 'ahora nunca combinan';
+      toast(`${n} ${n === 1 ? 'prenda' : 'prendas'}: ${what}`, { label: 'Deshacer', run: () => void setGarmentRules(previous) }, 7000);
+      exitSelection();
+    } catch (e) {
+      toast(`No se pudo guardar: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="stack">
       <p className="hint">
-        Gana la regla más específica: <b>excepción de prenda</b> → <b>regla de tipos</b> → <b>matriz de estilos</b>. Toca una prenda para crear o quitar una excepción.
+        Gana la regla más específica: <b>excepción de prenda</b> → <b>regla de tipos</b> → <b>matriz de estilos</b>.{' '}
+        {selecting ? 'Toca las prendas que quieras cambiar y elige abajo.' : 'Toca una prenda para crear o quitar una excepción, o selecciona varias.'}
       </p>
-      <SearchInput value={q} onChange={setQ} placeholder="Buscar prenda…" />
+      <div className="row">
+        <div className="grow">
+          <SearchInput value={q} onChange={setQ} placeholder="Buscar prenda…" />
+        </div>
+        {selecting ? (
+          <button className="btn sm" onClick={exitSelection}>
+            Listo
+          </button>
+        ) : (
+          <button className="btn sm" onClick={() => setSelecting(true)}>
+            <CheckSquare /> Seleccionar
+          </button>
+        )}
+      </div>
       <Segmented<CompatFilter>
         label="Filtrar"
         value={filter}
@@ -227,9 +285,15 @@ function CompatTab({ g }: { g: Garment }) {
         <div key={position.id} className="stack" style={{ gap: 6 }}>
           <div className="section-title">
             <h3>{position.name}</h3>
-            <span className="small muted">
-              combina con {rows.filter((r) => r.verdict.ok).length} de {rows.length}
-            </span>
+            {selecting ? (
+              <button className="btn sm ghost" onClick={() => toggleAll(rows.map((r) => r.other.id))}>
+                {rows.every((r) => selected.has(r.other.id)) ? 'Quitar todas' : `Todas (${rows.length})`}
+              </button>
+            ) : (
+              <span className="small muted">
+                combina con {rows.filter((r) => r.verdict.ok).length} de {rows.length}
+              </span>
+            )}
           </div>
           <div className="card-list">
             {rows.map(({ other, verdict }) => (
@@ -237,7 +301,7 @@ function CompatTab({ g }: { g: Garment }) {
                 key={other.id}
                 garment={other}
                 size="sm"
-                onClick={() => setEditing({ other, verdict })}
+                onClick={() => (selecting ? toggle(other.id) : setEditing({ other, verdict }))}
                 sub={
                   <>
                     <span className="level-tag" style={{ color: verdict.ok ? 'var(--success)' : 'var(--danger)' }}>
@@ -246,13 +310,33 @@ function CompatTab({ g }: { g: Garment }) {
                     · {verdict.reason}
                   </>
                 }
-                right={verdict.ok ? <span className="badge good"><Check /> Sí</span> : <span className="badge danger"><X /> No</span>}
+                right={
+                  <span className="row" style={{ gap: 8 }}>
+                    {verdict.ok ? <span className="badge good"><Check /> Sí</span> : <span className="badge danger"><X /> No</span>}
+                    {selecting && <span className={`check${selected.has(other.id) ? ' on' : ''}`}>{selected.has(other.id) && <Check strokeWidth={3} />}</span>}
+                  </span>
+                }
               />
             ))}
           </div>
         </div>
       ))}
       {editing && <ExceptionSheet g={g} other={editing.other} verdict={editing.verdict} onClose={() => setEditing(null)} />}
+      {selecting && <div aria-hidden style={{ height: 64 }} />}
+      {selecting && (
+        <div className="select-bar">
+          <span className="small">{selected.size === 0 ? 'Elige prendas' : `${selected.size} ${selected.size === 1 ? 'prenda' : 'prendas'}`}</span>
+          <button className="btn sm" disabled={busy || selected.size === 0} onClick={() => void applyBulk(true)} title="Siempre combinan">
+            <Check /> Sí
+          </button>
+          <button className="btn sm" disabled={busy || selected.size === 0} onClick={() => void applyBulk(false)} title="Nunca combinan">
+            <X /> No
+          </button>
+          <button className="btn sm ghost" disabled={busy || selected.size === 0} onClick={() => void applyBulk(null)} title="Quitar la excepción">
+            Reglas
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -318,16 +402,16 @@ function ExceptionSheet({ g, other, verdict, onClose }: { g: Garment; other: Gar
 
 function StatsTab({ g }: { g: Garment }) {
   const usage = useUsage()?.get(g.id);
-  const prefs = usePrefs();
+  const { analysis } = useWardrobeAnalysis();
   const outfits = (useOutfits() ?? []).filter((o) => o.garment_ids.includes(g.id));
   const { confirm, toast } = useFeedback();
-  if (!usage) return <Loading />;
-  const rate = usage.rejectionRate;
+  if (!usage || !analysis) return <Loading />;
+  const row = analysis.byId.get(g.id);
 
   const reset = async () => {
     const ok = await confirm({
       title: 'Reiniciar contadores',
-      message: 'Veces mostrada, rechazos y usos vuelven a cero para el análisis. El calendario conserva el historial.',
+      message: 'Sus usos vuelven a cero para el análisis (como si la acabaras de agregar). El calendario conserva el historial.',
       confirmText: 'Reiniciar',
     });
     if (!ok) return;
@@ -339,24 +423,16 @@ function StatsTab({ g }: { g: Garment }) {
     <div className="stack-lg">
       <div className="stat-grid">
         <div className="stat">
-          <b>{usage.shown}</b>
-          <span>veces mostrada</span>
+          <b>{usage.recentWears}</b>
+          <span>usos en {analysis.periodDays} días</span>
         </div>
         <div className="stat">
-          <b>{usage.strongRejects}</b>
-          <span>rechazos fuertes</span>
-        </div>
-        <div className="stat">
-          <b>{usage.weakRejects}</b>
-          <span>rechazos débiles</span>
-        </div>
-        <div className="stat">
-          <b>{rate === null ? '—' : `${Math.round(rate * 100)} %`}</b>
-          <span>tasa de rechazo</span>
+          <b>{row && row.expected > 0 ? `~${formatExpected(row.expected)}` : '—'}</b>
+          <span>esperado en su grupo</span>
         </div>
         <div className="stat">
           <b>{usage.timesWorn}</b>
-          <span>veces usada</span>
+          <span>usos en total</span>
         </div>
         <div className="stat">
           <b className="ellipsis" style={{ fontSize: '1rem', lineHeight: 1.9 }}>
@@ -365,14 +441,9 @@ function StatsTab({ g }: { g: Garment }) {
           <span>último uso</span>
         </div>
       </div>
-      {!usage.qualified && (
-        <p className="hint">
-          Con pocos datos no se sacan conclusiones: se necesita que aparezca al menos {prefs.minAppearances} veces (lleva {usage.shown}).
-        </p>
-      )}
       <p className="hint">
-        Tasa de rechazo = (rechazos fuertes + rechazos débiles × {prefs.weakRejectWeight}) ÷ veces mostrada. Cambiar esta prenda con su botón es un rechazo fuerte; regenerar
-        todo el outfit es uno débil.
+        {row?.position ? `Se compara con tus prendas de ${row.position.name.toLowerCase()}: ` : ''}
+        el esperado es lo que le tocaría si rotaras parejo. Solo cuentan los días que marcas “Lo usé hoy”.
       </p>
       {g.stats_reset_at && <p className="hint">Contadores reiniciados el {formatLongDate(new Date(g.stats_reset_at))}.</p>}
       <button className="btn block" onClick={() => void reset()}>

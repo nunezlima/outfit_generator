@@ -1,22 +1,29 @@
 // ═══════════════════════════════════════════════════════════════════════════
-// Estadísticas de uso y detector de prendas evitadas.
+// Estadísticas de uso y análisis del guardarropa.
 //
-// Por prenda contamos (a partir de stats_reset_at, si se reinició):
-//   · shown          veces que apareció en un outfit generado
-//   · strongRejects  veces que la cambiaste con su botón (rechazo fuerte)
-//   · weakRejects    veces que regeneraste el outfit completo estando ella
-//                    (rechazo débil: no sabemos cuál prenda te disgustó)
-//   · timesWorn / lastWornOn  a partir del historial
+// El análisis se basa en lo que REALMENTE te pones (botón "Lo usé hoy"), no
+// en lo que cambias en el generador: cambiar una prenda puede ser porque no
+// combina o porque había otra mejor, así que eso no dice si la evitas.
 //
-// Tasa de rechazo = (fuertes × 1 + débiles × pesoDébil) ÷ veces mostrada.
-// Dividir entre "veces mostrada" evita castigar a una prenda solo porque
-// aparece mucho: 3 rechazos en 30 apariciones (0.1) no es lo mismo que 3 en 4
-// (0.75). Como cada rechazo corresponde a una aparición, la tasa queda en
-// [0, 1]. Solo se usa para sacar conclusiones si shown ≥ minAppearances.
+// Por prenda, dentro del periodo de análisis (últimos N días) y desde que se
+// agregó o se reiniciaron sus contadores:
+//   · recentWears   veces que la usaste en el periodo
+//   · eligibleDays  días del periodo en que ya la tenías
+//
+// Uso esperado: los usos de su grupo (parte superior, calzado, …) repartidos
+// entre las prendas del grupo según cuántos días de cada una caen en el
+// periodo. Así una prenda recién agregada no sale como "poco usada", y unos
+// tenis no se comparan con las playeras (de calzado usas uno al día; de
+// accesorios, varios).
+//
+//   uso relativo = usos en el periodo ÷ uso esperado
+//
+// (Los eventos "mostrada / rechazo" se siguen contando para la ficha de cada
+// prenda, pero ya no deciden nada.)
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { daysBetween, parseISODate } from './dates';
-import type { Garment, GarmentEvent, ISODate, UserPrefs, UUID, WearLogEntry } from './types';
+import { daysBetween, parseISODate, toISODate } from './dates';
+import type { Catalog, Garment, GarmentEvent, ISODate, Position, UserPrefs, UUID, WearLogEntry } from './types';
 
 export interface GarmentUsage {
   garmentId: UUID;
@@ -35,13 +42,17 @@ export interface GarmentUsage {
   lastWornEver: ISODate | null;
   /** Días desde el último uso, o desde que se agregó/reinició si nunca se usó. */
   daysSinceUse: number;
+  /** Usos dentro del periodo de análisis (desde el reinicio, si lo hubo). */
+  recentWears: number;
+  /** Días del periodo en que ya tenías la prenda (≥ 1). */
+  eligibleDays: number;
 }
 
 export function computeUsage(
   garments: Garment[],
   wearLog: WearLogEntry[],
   events: GarmentEvent[],
-  prefs: Pick<UserPrefs, 'minAppearances' | 'weakRejectWeight'>,
+  prefs: Pick<UserPrefs, 'minAppearances' | 'weakRejectWeight' | 'unusedDays'>,
   now: Date = new Date(),
 ): Map<UUID, GarmentUsage> {
   const resetAt = new Map<UUID, number>();
@@ -60,8 +71,14 @@ export function computeUsage(
       lastWornOn: null,
       lastWornEver: null,
       daysSinceUse: 0,
+      recentWears: 0,
+      eligibleDays: 1,
     });
   }
+  const period = Math.max(1, prefs.unusedDays);
+  const windowStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (period - 1)).getTime();
+  const windowStartISO = toISODate(new Date(windowStart));
+  const nowISO = toISODate(now);
 
   for (const e of events) {
     const t = new Date(e.created_at).getTime();
@@ -88,6 +105,7 @@ export function computeUsage(
       if (reset !== undefined && wornTime < startOfDay(reset)) continue;
       u.timesWorn++;
       if (!u.lastWornOn || w.worn_on > u.lastWornOn) u.lastWornOn = w.worn_on;
+      if (w.worn_on >= windowStartISO && w.worn_on <= nowISO) u.recentWears++;
     }
   }
 
@@ -103,9 +121,15 @@ export function computeUsage(
       .filter((d): d is Date => !!d && !isNaN(d.getTime()));
     const ref = refs.reduce((a, b) => (b > a ? b : a));
     u.daysSinceUse = Math.max(0, daysBetween(ref, now));
+    // Días del periodo desde que la tienes (o desde el reinicio).
+    const since = Math.max(windowStart, startOfDay(Math.max(new Date(g.created_at).getTime() || 0, resetAt.get(g.id) ?? 0)));
+    u.eligibleDays = Math.max(1, Math.min(period, Math.round((startOfDay(now.getTime()) - since) / DAY) + 1));
   }
   return usage;
 }
+
+
+const DAY = 86_400_000;
 
 function startOfDay(ms: number): number {
   const d = new Date(ms);
@@ -115,67 +139,154 @@ function startOfDay(ms: number): number {
 export interface AnalysisRow {
   garment: Garment;
   usage: GarmentUsage;
+  /** Posición (grupo) con la que se compara. */
+  position: Position | undefined;
+  /** Usos que tendría en el periodo si rotaras parejo dentro de su grupo. */
+  expected: number;
+  /** recentWears ÷ expected (null si su grupo no tiene usos en el periodo). */
+  relative: number | null;
+}
+
+export interface GroupStats {
+  position: Position;
+  garments: number;
+  /** Prendas del grupo usadas al menos una vez en el periodo. */
+  used: number;
+  wears: number;
 }
 
 export interface WardrobeAnalysis {
-  /** Tasa de rechazo alta con suficientes apariciones. */
-  avoided: AnalysisRow[];
-  /** Sin usar desde hace ≥ unusedDays (o nunca usadas y agregadas hace ≥ unusedDays). */
-  unused: AnalysisRow[];
-  /** Nunca usadas (desde el reinicio). */
-  neverWorn: AnalysisRow[];
+  periodDays: number;
+  /** Días distintos con "Lo usé hoy" dentro del periodo. */
+  loggedDays: number;
+  /** ¿Hay datos suficientes para sacar conclusiones? */
+  enoughData: boolean;
+  totalWears: number;
+  /** Cuántas prendas suman el 80 % de tus usos (y de cuántas en total). */
+  concentration: { garments: number; of: number } | null;
+  groups: GroupStats[];
+  /** Sin usar en el periodo (ya la tenías al menos MIN_ELIGIBLE días). */
+  idle: AnalysisRow[];
+  /** Usadas, pero muy por debajo de lo esperado. */
+  underused: AnalysisRow[];
+  /** Las que más usas en el periodo. */
   mostWorn: AnalysisRow[];
-  /** Hasta 5 prendas que "quizá ya no te gustan" (resumen periódico). */
+  /** Hasta 5 prendas que quizá no necesitas (resumen mensual). */
   summary: AnalysisRow[];
-  /** Prendas con datos insuficientes para opinar sobre rechazo. */
-  insufficientData: number;
+  /** Por prenda, para la ficha. */
+  byId: Map<UUID, AnalysisRow>;
 }
 
-export function analyzeWardrobe(garments: Garment[], usage: Map<UUID, GarmentUsage>, prefs: UserPrefs): WardrobeAnalysis {
+/** Días registrados mínimos en el periodo para opinar. */
+export const MIN_LOGGED_DAYS = 7;
+/** Días que debes tener una prenda antes de juzgar si la usas. */
+const MIN_ELIGIBLE_DAYS = 14;
+/** Uso relativo por debajo del cual una prenda usada cuenta como "poco usada". */
+export const UNDERUSED_RATIO = 0.4;
+
+export function analyzeWardrobe(input: {
+  garments: Garment[];
+  usage: Map<UUID, GarmentUsage>;
+  wearLog: WearLogEntry[];
+  catalog: Pick<Catalog, 'positions' | 'types'>;
+  prefs: Pick<UserPrefs, 'unusedDays'>;
+  now?: Date;
+}): WardrobeAnalysis {
+  const { garments, usage, wearLog, catalog, prefs } = input;
+  const now = input.now ?? new Date();
+  const periodDays = Math.max(1, prefs.unusedDays);
+  const fromISO = toISODate(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (periodDays - 1)));
+  const nowISO = toISODate(now);
+  const loggedDays = new Set(wearLog.filter((w) => !w.deleted_at && w.worn_on >= fromISO && w.worn_on <= nowISO && w.garment_ids.length > 0).map((w) => w.worn_on)).size;
+  const enoughData = loggedDays >= MIN_LOGGED_DAYS;
+
+  const positionById = new Map(catalog.positions.map((p) => [p.id, p]));
+  const positionOfType = new Map(catalog.types.map((t) => [t.id, positionById.get(t.position_id)]));
+
   // Las archivadas ya están "fuera de circulación": no se analizan.
-  const rows: AnalysisRow[] = garments
-    .filter((g) => g.status !== 'archived')
-    .map((g) => ({ garment: g, usage: usage.get(g.id)! }))
-    .filter((r) => !!r.usage);
+  const base = garments
+    .filter((g) => !g.deleted_at && g.status !== 'archived' && usage.has(g.id))
+    .map((g) => ({ garment: g, usage: usage.get(g.id)!, position: positionOfType.get(g.type_id) }));
 
-  const isAvoided = (r: AnalysisRow) => r.usage.qualified && (r.usage.rejectionRate ?? 0) >= prefs.avoidThreshold;
-  const isUnused = (r: AnalysisRow) => r.usage.daysSinceUse >= prefs.unusedDays;
+  // Uso esperado por grupo, repartido según los días que tienes cada prenda.
+  const groupKey = (p: Position | undefined) => p?.id ?? '—';
+  const groupWears = new Map<string, number>();
+  const groupDays = new Map<string, number>();
+  for (const r of base) {
+    const k = groupKey(r.position);
+    groupWears.set(k, (groupWears.get(k) ?? 0) + r.usage.recentWears);
+    groupDays.set(k, (groupDays.get(k) ?? 0) + r.usage.eligibleDays);
+  }
+  const rows: AnalysisRow[] = base.map((r) => {
+    const k = groupKey(r.position);
+    const wears = groupWears.get(k) ?? 0;
+    const expected = wears > 0 ? (wears * r.usage.eligibleDays) / (groupDays.get(k) || 1) : 0;
+    return { ...r, expected, relative: expected > 0 ? r.usage.recentWears / expected : null };
+  });
 
-  const avoided = rows.filter(isAvoided).sort((a, b) => (b.usage.rejectionRate ?? 0) - (a.usage.rejectionRate ?? 0) || b.usage.shown - a.usage.shown);
-  const unused = rows.filter(isUnused).sort((a, b) => b.usage.daysSinceUse - a.usage.daysSinceUse);
-  const neverWorn = rows.filter((r) => r.usage.timesWorn === 0).sort((a, b) => b.usage.daysSinceUse - a.usage.daysSinceUse);
+  const groups: GroupStats[] = catalog.positions
+    .map((position) => {
+      const inGroup = rows.filter((r) => r.position?.id === position.id);
+      return {
+        position,
+        garments: inGroup.length,
+        used: inGroup.filter((r) => r.usage.recentWears > 0).length,
+        wears: inGroup.reduce((s, r) => s + r.usage.recentWears, 0),
+      };
+    })
+    .filter((g) => g.garments > 0)
+    .sort((a, b) => a.position.sort_order - b.position.sort_order);
+
+  const totalWears = rows.reduce((s, r) => s + r.usage.recentWears, 0);
+  let concentration: WardrobeAnalysis['concentration'] = null;
+  if (totalWears > 0) {
+    const sorted = rows.map((r) => r.usage.recentWears).sort((a, b) => b - a);
+    let acc = 0;
+    let k = 0;
+    while (acc < totalWears * 0.8) acc += sorted[k++];
+    concentration = { garments: k, of: rows.length };
+  }
+
+  const judged = rows.filter((r) => r.usage.eligibleDays >= Math.min(MIN_ELIGIBLE_DAYS, periodDays));
+  const idle = judged
+    .filter((r) => r.usage.recentWears === 0)
+    .sort((a, b) => b.usage.daysSinceUse - a.usage.daysSinceUse || b.expected - a.expected);
+  const underused = judged
+    .filter((r) => r.usage.recentWears > 0 && r.relative !== null && r.expected >= 1 && r.relative <= UNDERUSED_RATIO)
+    .sort((a, b) => (a.relative ?? 0) - (b.relative ?? 0));
   const mostWorn = rows
-    .filter((r) => r.usage.timesWorn > 0)
-    .sort((a, b) => b.usage.timesWorn - a.usage.timesWorn || (b.usage.lastWornOn ?? '').localeCompare(a.usage.lastWornOn ?? ''))
-    .slice(0, 10);
+    .filter((r) => r.usage.recentWears > 0)
+    .sort((a, b) => b.usage.recentWears - a.usage.recentWears || (b.relative ?? 0) - (a.relative ?? 0))
+    .slice(0, 15);
 
-  // Puntuación del resumen: combina qué tanto la rechazas y cuánto llevas sin
-  // usarla. Solo entran las que ya están marcadas por alguno de los dos motivos.
-  const score = (r: AnalysisRow) =>
-    (isAvoided(r) ? 1 + (r.usage.rejectionRate ?? 0) : 0) + (isUnused(r) ? Math.min(r.usage.daysSinceUse / prefs.unusedDays, 3) * 0.5 : 0);
-  const summary = rows
-    .filter((r) => isAvoided(r) || isUnused(r))
-    .sort((a, b) => score(b) - score(a))
-    .slice(0, 5);
+  // Resumen: primero las que llevan más tiempo sin usarse, luego las poco usadas.
+  const summary = enoughData ? [...idle, ...underused].slice(0, 5) : [];
 
   return {
-    avoided,
-    unused,
-    neverWorn,
+    periodDays,
+    loggedDays,
+    enoughData,
+    totalWears,
+    concentration,
+    groups,
+    idle,
+    underused,
     mostWorn,
     summary,
-    insufficientData: rows.filter((r) => !r.usage.qualified).length,
+    byId: new Map(rows.map((r) => [r.garment.id, r])),
   };
 }
 
-/** Motivo legible de por qué una prenda está en el resumen. */
-export function summaryReason(row: AnalysisRow, prefs: UserPrefs): string {
-  const parts: string[] = [];
-  if (row.usage.qualified && (row.usage.rejectionRate ?? 0) >= prefs.avoidThreshold) {
-    parts.push(`la rechazas el ${Math.round((row.usage.rejectionRate ?? 0) * 100)} % de las veces`);
+/** Motivo legible de por qué una prenda está en el resumen o en una lista. */
+export function summaryReason(row: AnalysisRow): string {
+  const u = row.usage;
+  if (u.recentWears === 0) {
+    if (!u.lastWornOn) return `no la has usado desde que la agregaste (${u.daysSinceUse} días)`;
+    return `no la usas hace ${u.daysSinceUse} días`;
   }
-  if (row.usage.daysSinceUse >= prefs.unusedDays) {
-    parts.push(row.usage.lastWornOn ? `no la usas hace ${row.usage.daysSinceUse} días` : `no la has usado desde que la agregaste (${row.usage.daysSinceUse} días)`);
-  }
-  return parts.join(' y ');
+  return `${u.recentWears} ${u.recentWears === 1 ? 'uso' : 'usos'} en el periodo; rotando parejo serían unos ${formatExpected(row.expected)}`;
+}
+
+export function formatExpected(n: number): string {
+  return n >= 10 ? String(Math.round(n)) : n >= 1 ? n.toFixed(1).replace('.0', '') : n.toFixed(1);
 }

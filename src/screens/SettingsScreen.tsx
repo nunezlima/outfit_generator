@@ -261,37 +261,10 @@ function AnalysisPrefsSection() {
       <div className="card stack">
         <div className="spread">
           <div>
-            <div>Mínimo de apariciones</div>
-            <div className="hint">Antes de marcar una prenda como evitada</div>
+            <div>Periodo de análisis</div>
+            <div className="hint">Días hacia atrás que se toman en cuenta para ver qué usas y qué no</div>
           </div>
-          <NumberStepper label="apariciones mínimas" value={prefs.minAppearances} min={1} max={100} onChange={(v) => void updatePrefs({ minAppearances: v })} />
-        </div>
-        <div className="divider" />
-        <div className="spread">
-          <div>
-            <div>“Sin usar” después de</div>
-            <div className="hint">Días sin ponértela</div>
-          </div>
-          <NumberStepper label="días sin usar" value={prefs.unusedDays} min={1} max={730} onChange={(v) => void updatePrefs({ unusedDays: v })} />
-        </div>
-        <div className="divider" />
-        <div className="field">
-          <label htmlFor="weak">Peso del rechazo débil (regenerar todo)</label>
-          <select id="weak" className="select" value={String(prefs.weakRejectWeight)} onChange={(e) => void updatePrefs({ weakRejectWeight: Number(e.target.value) })}>
-            <option value="0.1">0.1 — casi no cuenta</option>
-            <option value="0.25">0.25 — recomendado</option>
-            <option value="0.5">0.5 — cuenta la mitad</option>
-          </select>
-        </div>
-        <div className="field">
-          <label htmlFor="thr">Considerar “evitada” desde una tasa de</label>
-          <select id="thr" className="select" value={String(prefs.avoidThreshold)} onChange={(e) => void updatePrefs({ avoidThreshold: Number(e.target.value) })}>
-            {[0.3, 0.4, 0.5, 0.6, 0.7].map((v) => (
-              <option key={v} value={v}>
-                {Math.round(v * 100)} %
-              </option>
-            ))}
-          </select>
+          <NumberStepper label="días del periodo" value={prefs.unusedDays} min={7} max={365} onChange={(v) => void updatePrefs({ unusedDays: v })} />
         </div>
       </div>
     </section>

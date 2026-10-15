@@ -155,16 +155,6 @@ export function recencyWeight(daysSinceWorn: number | null): number {
   return 0.2 + 1.1 * (1 - Math.exp(-d / 10));
 }
 
-/**
- * Peso por rechazo: solo si hay datos suficientes (qualified). Una prenda
- * siempre rechazada sale con 40 % de su probabilidad normal, nunca 0, para
- * que puedas cambiar de opinión.
- */
-export function rejectionWeight(usage: GarmentUsage | undefined): number {
-  if (!usage || !usage.qualified || usage.rejectionRate === null) return 1;
-  return Math.max(0.4, 1 - 0.6 * usage.rejectionRate);
-}
-
 // ─── Preparación: candidatas por posición ───────────────────────────────────
 
 interface Prepared {
@@ -246,7 +236,9 @@ function prepare(ctx: GeneratorContext): Prepared {
 function weightOf(prep: Prepared, g: Garment, chosen: Garment[], previous: Set<UUID>): number {
   const usage = prep.ctx.usage?.get(g.id);
   const days = usage?.lastWornEver ? daysBetween(usage.lastWornEver, prep.now) : null;
-  let w = recencyWeight(days) * rejectionWeight(usage);
+  // Solo cuenta lo que de verdad te pones: cambiar una prenda en el generador
+  // no significa que la evites (quizá no combinaba), así que no la castiga.
+  let w = recencyWeight(days);
   if (previous.has(g.id)) w *= 0.35; // que "regenerar" cambie de verdad
   if (chosen.some((c) => colorsClash(c.color, g.color))) w *= 0.75; // sugerencia suave de color
   return w;

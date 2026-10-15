@@ -234,10 +234,9 @@ pasos para que nunca se congele.
 
 ### Paso 4 — Pesos (rotación sin volverse predecible)
 ```
-peso = recencia × rechazo × color × repetición
+peso = recencia × color × repetición
 recencia(d)  = 0.2 + 1.1 · (1 − e^(−d/10))      d = días desde el último uso
                (nunca usada → 1.3; usada hoy → 0.2; hace 1 mes → ~1.25)
-rechazo      = max(0.4, 1 − 0.6 · tasaRechazo)   solo con apariciones suficientes
 color        = 1 si armoniza con lo ya elegido, 0.75 si choca (sugerencia suave)
 repetición   = 0.35 si estaba en el outfit anterior (para que "regenerar" cambie)
 ```
@@ -254,29 +253,39 @@ Es aleatoriedad **proporcional**: una prenda usada ayer puede salir, solo es
    frecuente.
 4. Si nada de lo anterior, mensaje general con las reglas que más bloquearon.
 
-### Eventos para el análisis
-- Cada outfit generado → evento `shown` con sus prendas.
-- Cambiar una prenda con su botón → `reject_strong` para esa prenda.
-- Regenerar todo → `reject_weak` para las prendas no bloqueadas.
-- Guardar o marcar "Lo usé hoy" no genera rechazo.
+### Eventos del generador
+- Cada outfit generado → evento `shown`; cambiar una prenda → `reject_strong`;
+  regenerar todo → `reject_weak`.
+- Se siguen guardando, pero **ya no deciden nada**: cambiar una prenda puede
+  ser porque no combinaba o porque había otra mejor, no porque la evites.
 
 ---
 
 ## 7. Análisis del guardarropa
 
-```
-rechazos ponderados = fuertes × 1 + débiles × pesoDébil (0.25 por defecto)
-tasa de rechazo     = rechazos ponderados ÷ veces mostrada        (0 a 1)
-```
-Dividir entre "veces mostrada" evita castigar a una prenda solo por aparecer
-mucho. Una prenda solo se marca como "evitada" si se mostró al menos
-`mínimo de apariciones` veces (5 por defecto) y su tasa ≥ 0.5.
+Se basa solo en lo que **de verdad te pones** (registro "Lo usé hoy"), dentro
+de un periodo configurable (últimos N días, 60 por defecto).
 
-Listas: más evitadas, sin usar hace X días (configurable), nunca usadas, más
-usadas. Acciones: archivar, eliminar, reiniciar contadores.
-Resumen mensual: al empezar un mes aparece "Estas N prendas quizá ya no te
-gustan" (máx. 5, ordenadas por una puntuación que combina tasa de rechazo y
-días sin usar) hasta que lo marques como visto.
+```
+usos en el periodo   = días del periodo en que la usaste (desde que la tienes / el reinicio)
+días elegibles       = días del periodo en que ya la tenías
+uso esperado         = usos de su grupo × días elegibles ÷ Σ días elegibles del grupo
+uso relativo         = usos en el periodo ÷ uso esperado
+```
+El **grupo** es la posición (parte superior, capa intermedia, calzado…): de
+calzado usas uno al día y de accesorios varios, así que no se mezclan. Repartir
+según los días elegibles evita juzgar mal a una prenda recién agregada.
+
+- **Panorama**: cuántas prendas suman el 80 % de tus usos y, por grupo,
+  cuántas usaste de cuántas tienes.
+- **Sin usar**: 0 usos en el periodo (y la tienes hace ≥ 14 días).
+- **Poco usadas**: uso relativo ≤ 0.4 con un esperado ≥ 1.
+- **Más usadas**: las de más usos en el periodo.
+- Con menos de 7 días registrados en el periodo no se sacan conclusiones.
+
+Acciones: archivar, eliminar, reiniciar contadores. Resumen mensual: "Estas N
+prendas casi no las usas" (máx. 5: primero las sin usar, luego las poco usadas)
+hasta que lo marques como visto.
 
 ---
 

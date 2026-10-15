@@ -63,7 +63,7 @@ export function GenerateScreen() {
             <Link to="/analisis" className="callout info" style={{ textDecoration: 'none', color: 'inherit' }}>
               <Sparkles />
               <span>
-                <b>Resumen del mes:</b> {analysis.summary.length} {analysis.summary.length === 1 ? 'prenda que quizá ya no te gusta' : 'prendas que quizá ya no te gustan'}. Toca para verlas.
+                <b>Resumen del mes:</b> {analysis.summary.length} {analysis.summary.length === 1 ? 'prenda que casi no usas' : 'prendas que casi no usas'}. Toca para verlas.
               </span>
             </Link>
           )}
