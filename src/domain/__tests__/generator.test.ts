@@ -242,7 +242,7 @@ describe('aleatoriedad ponderada', () => {
     const usage = new Map<string, GarmentUsage>();
     const u = (gid: string, lastWornEver: string | null): GarmentUsage => ({
       garmentId: gid, shown: 0, strongRejects: 0, weakRejects: 0, weightedRejections: 0, rejectionRate: null, qualified: false,
-      timesWorn: lastWornEver ? 1 : 0, lastWornOn: lastWornEver, lastWornEver, daysSinceUse: 0,
+      timesWorn: lastWornEver ? 1 : 0, lastWornOn: lastWornEver, lastWornEver, daysSinceUse: 0, recentWears: 0, eligibleDays: 1,
     });
     usage.set(id('g:Camiseta A'), u(id('g:Camiseta A'), '2026-09-28'));
     usage.set(id('g:Camiseta B'), u(id('g:Camiseta B'), '2026-06-01'));

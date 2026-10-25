@@ -1,31 +1,32 @@
-// Análisis del guardarropa: prendas evitadas, sin usar, nunca usadas, más
-// usadas y el resumen mensual "quizá ya no te gustan".
+// Análisis del guardarropa basado en lo que REALMENTE te pones ("Lo usé hoy"):
+// panorama por grupo, prendas sin usar, poco usadas y más usadas, y el
+// resumen mensual de prendas que quizá no necesitas.
 
-import { Archive, ChartColumn, CircleHelp, Eye, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
+import { Archive, CalendarCheck, ChartColumn, CircleHelp, Eye, RotateCcw, Sparkles, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWardrobeAnalysis } from '../app/analysisHook';
 import { usePrefs } from '../data/hooks';
 import { deleteGarments, resetGarmentStats, setStatus, updatePrefs } from '../data/repo';
-import { summaryReason, type AnalysisRow } from '../domain/analysis';
+import { formatExpected, MIN_LOGGED_DAYS, summaryReason, UNDERUSED_RATIO, type AnalysisRow, type WardrobeAnalysis } from '../domain/analysis';
 import { monthKey, monthName, relativeDays } from '../domain/dates';
 import { EmptyState, Loading, NumberStepper, Page, Tabs } from '../ui/common';
 import { useFeedback } from '../ui/feedback';
 import { GarmentPhoto, GarmentRow } from '../ui/GarmentViews';
 import { Sheet } from '../ui/Sheet';
 
-type Tab = 'avoided' | 'unused' | 'never' | 'top';
+type Tab = 'idle' | 'underused' | 'top';
 
 export function AnalysisScreen() {
   const { analysis, summaryPending } = useWardrobeAnalysis();
   const prefs = usePrefs();
-  const [tab, setTab] = useState<Tab>('avoided');
+  const [tab, setTab] = useState<Tab>('idle');
   const [acting, setActing] = useState<AnalysisRow | null>(null);
   const [help, setHelp] = useState(false);
   if (!analysis) return <Loading />;
 
   const now = new Date();
-  const lists: Record<Tab, AnalysisRow[]> = { avoided: analysis.avoided, unused: analysis.unused, never: analysis.neverWorn, top: analysis.mostWorn };
+  const lists: Record<Tab, AnalysisRow[]> = { idle: analysis.idle, underused: analysis.underused, top: analysis.mostWorn };
   const rows = lists[tab];
 
   return (
@@ -38,6 +39,26 @@ export function AnalysisScreen() {
       }
     >
       <div className="stack-lg">
+        <div className="spread">
+          <span className="hint">Periodo analizado: últimos</span>
+          <div className="row">
+            <NumberStepper label="días del periodo" value={prefs.unusedDays} min={7} max={365} onChange={(v) => void updatePrefs({ unusedDays: v })} />
+            <span className="small">días</span>
+          </div>
+        </div>
+
+        {!analysis.enoughData ? (
+          <div className="callout info">
+            <CalendarCheck />
+            <span>
+              Llevas <b>{analysis.loggedDays}</b> {analysis.loggedDays === 1 ? 'día registrado' : 'días registrados'} en este periodo. Marca <b>“Lo usé hoy”</b> cada día: con al
+              menos {MIN_LOGGED_DAYS} días el análisis empieza a sacar conclusiones.
+            </span>
+          </div>
+        ) : (
+          <Overview analysis={analysis} />
+        )}
+
         {analysis.summary.length > 0 && (
           <div className="card stack" style={summaryPending ? { borderColor: 'var(--accent)' } : undefined}>
             <div className="spread">
@@ -47,11 +68,11 @@ export function AnalysisScreen() {
               {summaryPending && <span className="badge accent">Nuevo</span>}
             </div>
             <p className="muted small">
-              {analysis.summary.length === 1 ? 'Esta prenda quizá ya no te gusta:' : `Estas ${analysis.summary.length} prendas quizá ya no te gustan:`}
+              {analysis.summary.length === 1 ? 'Esta prenda casi no la usas. ¿La necesitas?' : `Estas ${analysis.summary.length} prendas casi no las usas. ¿Las necesitas?`}
             </p>
             <div className="card-list">
               {analysis.summary.map((r) => (
-                <GarmentRow key={r.garment.id} garment={r.garment} size="sm" sub={summaryReason(r, prefs)} onClick={() => setActing(r)} />
+                <GarmentRow key={r.garment.id} garment={r.garment} size="sm" sub={summaryReason(r)} onClick={() => setActing(r)} />
               ))}
             </div>
             {summaryPending && (
@@ -67,33 +88,22 @@ export function AnalysisScreen() {
             value={tab}
             onChange={setTab}
             tabs={[
-              { value: 'avoided', label: `Evitadas (${analysis.avoided.length})` },
-              { value: 'unused', label: `Sin usar (${analysis.unused.length})` },
-              { value: 'never', label: `Nunca usadas (${analysis.neverWorn.length})` },
+              { value: 'idle', label: `Sin usar (${analysis.idle.length})` },
+              { value: 'underused', label: `Poco usadas (${analysis.underused.length})` },
               { value: 'top', label: 'Más usadas' },
             ]}
           />
-          {tab === 'avoided' && (
-            <p className="hint">
-              Tasa de rechazo ≥ {Math.round(prefs.avoidThreshold * 100)} % con al menos {prefs.minAppearances} apariciones.
-              {analysis.insufficientData > 0 && ` ${analysis.insufficientData} prendas aún no tienen datos suficientes.`}
-            </p>
-          )}
-          {tab === 'unused' && (
-            <div className="spread">
-              <span className="hint">Sin usar desde hace al menos</span>
-              <div className="row">
-                <NumberStepper label="días" value={prefs.unusedDays} min={1} max={730} onChange={(v) => void updatePrefs({ unusedDays: v })} />
-                <span className="small">días</span>
-              </div>
-            </div>
-          )}
+          <p className="hint">
+            {tab === 'idle' && `No las usaste en los últimos ${analysis.periodDays} días (solo cuentan las que tienes desde hace al menos 2 semanas).`}
+            {tab === 'underused' && `Las usas menos del ${Math.round(UNDERUSED_RATIO * 100)} % de lo que les tocaría si rotaras parejo dentro de su grupo.`}
+            {tab === 'top' && `Las que más te pusiste en los últimos ${analysis.periodDays} días.`}
+          </p>
           {rows.length === 0 ? (
-            <EmptyState icon={<ChartColumn />} title={tab === 'avoided' ? 'Ninguna prenda evitada' : 'Nada por aquí'} text={tab === 'avoided' ? 'Sigue generando outfits: con el tiempo verás qué prendas cambias más.' : undefined} />
+            <EmptyState icon={<ChartColumn />} title="Nada por aquí" text={analysis.loggedDays === 0 ? 'Aún no hay días registrados con “Lo usé hoy”.' : undefined} />
           ) : (
             <div className="card-list">
               {rows.map((r) => (
-                <GarmentRow key={r.garment.id} garment={r.garment} onClick={() => setActing(r)} sub={subFor(tab, r)} right={tab === 'avoided' ? <RateMeter rate={r.usage.rejectionRate ?? 0} /> : undefined} />
+                <GarmentRow key={r.garment.id} garment={r.garment} onClick={() => setActing(r)} sub={subFor(tab, r)} right={tab !== 'idle' ? <UseMeter row={r} /> : undefined} />
               ))}
             </div>
           )}
@@ -104,27 +114,20 @@ export function AnalysisScreen() {
       {help && (
         <Sheet title="¿Cómo se calcula?" onClose={() => setHelp(false)}>
           <div className="stack small">
-            <p>Por cada prenda se cuenta, desde que se agregó o desde que reiniciaste sus contadores:</p>
-            <ul style={{ margin: 0, paddingLeft: 18 }}>
-              <li>
-                <b>Veces mostrada</b> en un outfit generado.
-              </li>
-              <li>
-                <b>Rechazo fuerte</b>: la cambiaste con su botón 🔄 (sabemos que era ella).
-              </li>
-              <li>
-                <b>Rechazo débil</b>: regeneraste todo el outfit estando ella (vale {prefs.weakRejectWeight}, porque no sabemos cuál prenda no te gustó).
-              </li>
-            </ul>
             <p>
-              <b>Tasa de rechazo</b> = (fuertes + débiles × {prefs.weakRejectWeight}) ÷ veces mostrada. Así una prenda que aparece mucho no sale perjudicada: 3 rechazos en 30
-              apariciones (10 %) no es lo mismo que 3 en 4 (75 %).
+              El análisis solo usa lo que <b>de verdad te pones</b>: cada vez que tocas <b>“Lo usé hoy”</b>, esas prendas suman un uso. Lo que cambias en el generador no cuenta,
+              porque cambiar una prenda puede ser porque no combinaba o porque había otra mejor.
             </p>
             <p>
-              Para no sacar conclusiones con pocos datos, una prenda necesita al menos <b>{prefs.minAppearances} apariciones</b> antes de marcarse como evitada. Puedes cambiar
-              estos valores en Ajustes.
+              Cada prenda se compara con las de <b>su mismo grupo</b> (parte superior, capa intermedia, calzado…): de calzado usas un par al día, de accesorios varios, así que no
+              se mezclan.
             </p>
-            <p>El generador también usa estos datos: las prendas muy rechazadas salen algo menos (nunca desaparecen) y las que no usas hace tiempo salen más.</p>
+            <p>
+              <b>Uso esperado</b> = los usos de su grupo en el periodo repartidos parejo entre sus prendas (una prenda que agregaste hace poco espera menos). Si la usas mucho menos
+              de lo esperado, sale como poco usada; si no la usaste nada, como sin usar.
+            </p>
+            <p>Las prendas archivadas no se analizan. “Reiniciar contadores” le da a una prenda un nuevo comienzo para el análisis.</p>
+            <p>El generador favorece las prendas que llevas más tiempo sin ponerte, así que lo olvidado tiende a salir más.</p>
           </div>
         </Sheet>
       )}
@@ -132,19 +135,48 @@ export function AnalysisScreen() {
   );
 }
 
-function subFor(tab: Tab, r: AnalysisRow): string {
-  const u = r.usage;
-  if (tab === 'avoided') return `Rechazada ${Math.round((u.rejectionRate ?? 0) * 100)} % · ${u.shown} apariciones · ${u.strongRejects} fuertes, ${u.weakRejects} débiles`;
-  if (tab === 'unused') return u.lastWornOn ? `Último uso ${relativeDays(u.daysSinceUse)}` : `Nunca usada · agregada ${relativeDays(u.daysSinceUse)}`;
-  if (tab === 'never') return `Agregada ${relativeDays(u.daysSinceUse)} · mostrada ${u.shown} ${u.shown === 1 ? 'vez' : 'veces'}`;
-  return `${u.timesWorn} ${u.timesWorn === 1 ? 'uso' : 'usos'} · último ${relativeDays(u.daysSinceUse)}`;
+/** Panorama: concentración y uso por grupo. */
+function Overview({ analysis }: { analysis: WardrobeAnalysis }) {
+  const c = analysis.concentration;
+  return (
+    <div className="card stack">
+      {c && (
+        <p>
+          <b>{c.garments}</b> de tus {c.of} prendas ({Math.round((c.garments / c.of) * 100)} %) suman el <b>80 %</b> de lo que te pusiste en {analysis.loggedDays} días registrados.
+        </p>
+      )}
+      <div className="stack" style={{ gap: 10 }}>
+        {analysis.groups.map((g) => (
+          <div key={g.position.id} className="stack" style={{ gap: 4 }}>
+            <div className="spread small">
+              <span>{g.position.name}</span>
+              <span className="muted">
+                usaste {g.used} de {g.garments}
+              </span>
+            </div>
+            <div className="meter">
+              <i style={{ width: `${Math.round((g.used / g.garments) * 100)}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
-function RateMeter({ rate }: { rate: number }) {
+function subFor(tab: Tab, r: AnalysisRow): string {
+  const u = r.usage;
+  if (tab === 'idle') return u.lastWornOn ? `Último uso ${relativeDays(u.daysSinceUse)}` : `Nunca usada · agregada ${relativeDays(u.daysSinceUse)}`;
+  return `${u.recentWears} ${u.recentWears === 1 ? 'uso' : 'usos'} · esperado ~${formatExpected(r.expected)} · último ${relativeDays(u.daysSinceUse)}`;
+}
+
+/** Barra: usos reales frente a lo esperado (lleno = el doble o más). */
+function UseMeter({ row }: { row: AnalysisRow }) {
+  const rel = row.relative ?? 0;
   return (
-    <div style={{ width: 54 }} title={`${Math.round(rate * 100)} %`}>
+    <div style={{ width: 54 }} title={`${Math.round(rel * 100)} % de lo esperado`}>
       <div className="meter">
-        <i style={{ width: `${Math.round(rate * 100)}%` }} />
+        <i style={{ width: `${Math.min(100, Math.round(rel * 50))}%` }} />
       </div>
     </div>
   );
@@ -175,7 +207,8 @@ function ActionsSheet({ row, onClose }: { row: AnalysisRow; onClose: () => void 
         <div className="row">
           <GarmentPhoto garment={g} className="thumb lg" />
           <div className="small muted">
-            Mostrada {row.usage.shown} veces · usada {row.usage.timesWorn} · {row.usage.lastWornOn ? `último uso ${relativeDays(row.usage.daysSinceUse)}` : 'nunca usada'}
+            {row.usage.recentWears} {row.usage.recentWears === 1 ? 'uso' : 'usos'} en el periodo (esperado ~{formatExpected(row.expected)}) · {row.usage.timesWorn} en total ·{' '}
+            {row.usage.lastWornOn ? `último uso ${relativeDays(row.usage.daysSinceUse)}` : 'nunca usada'}
           </div>
         </div>
         <div className="card-list">

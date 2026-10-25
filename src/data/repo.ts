@@ -12,6 +12,7 @@ import { applyWash, applyWear } from '../domain/laundry';
 import type {
   EventKind,
   Garment,
+  GarmentRule,
   GarmentStatus,
   GarmentType,
   GeneratorFilters,
@@ -219,6 +220,32 @@ export async function setGarmentRule(a: UUID, b: UUID, allowed: boolean | null):
     return;
   }
   await saveRows('garment_rules', [{ ...(existing ?? baseRow()), deleted_at: null, garment_a, garment_b, allowed }]);
+}
+
+/**
+ * Varias excepciones de una sola vez (un solo envío). allowed: true = siempre
+ * combinan, false = nunca, null = quitar la excepción. Devuelve cómo estaba
+ * cada par antes, para poder deshacer.
+ */
+export async function setGarmentRules(pairs: { a: UUID; b: UUID; allowed: boolean | null }[]): Promise<{ a: UUID; b: UUID; allowed: boolean | null }[]> {
+  const db = getDB();
+  const previous: { a: UUID; b: UUID; allowed: boolean | null }[] = [];
+  const upserts: GarmentRule[] = [];
+  const removals: GarmentRule[] = [];
+  for (const { a, b, allowed } of pairs) {
+    if (a === b) continue;
+    const [garment_a, garment_b] = orderedPair(a, b);
+    const existing = await db.garment_rules.get([garment_a, garment_b]);
+    previous.push({ a, b, allowed: existing && !existing.deleted_at ? existing.allowed : null });
+    if (allowed === null) {
+      if (existing) removals.push(existing);
+    } else {
+      upserts.push({ ...(existing ?? baseRow()), deleted_at: null, garment_a, garment_b, allowed });
+    }
+  }
+  if (upserts.length) await saveRows('garment_rules', upserts);
+  if (removals.length) await softDelete('garment_rules', removals);
+  return previous;
 }
 
 // ─── Categorías: posiciones, tipos y estilos ───────────────────────────────
