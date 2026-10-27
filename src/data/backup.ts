@@ -71,7 +71,7 @@ export async function exportBackup(progress: Progress = () => {}): Promise<Blob>
 type Tables = BackupData['tables'];
 
 /** Tablas cuya clave primaria es un id propio (las de reglas usan el par). */
-const ID_TABLES: TableName[] = ['positions', 'garment_types', 'styles', 'garments', 'presets', 'outfits', 'wear_log', 'garment_events'];
+const ID_TABLES: TableName[] = ['positions', 'garment_types', 'styles', 'garments', 'presets', 'outfit_events', 'occasions', 'perfumes', 'outfits', 'wear_log', 'garment_events'];
 
 /**
  * Da id NUEVOS a todas las filas y reescribe cada referencia. Se usa al
@@ -114,6 +114,13 @@ export function remapIds(tables: Tables, newId: () => string = () => crypto.rand
           row.config = c;
           break;
         }
+        case 'occasions':
+          row.event_id = m(r.event_id);
+          row.style_ids = ms(r.style_ids);
+          row.perfumes_hot = ms(r.perfumes_hot ?? []);
+          row.perfumes_mild = ms(r.perfumes_mild ?? []);
+          row.perfumes_cold = ms(r.perfumes_cold ?? []);
+          break;
         case 'outfits':
         case 'garment_events':
           row.garment_ids = ms(r.garment_ids);
@@ -121,6 +128,7 @@ export function remapIds(tables: Tables, newId: () => string = () => crypto.rand
         case 'wear_log':
           row.garment_ids = ms(r.garment_ids);
           row.outfit_id = r.outfit_id ? m(r.outfit_id) : null;
+          row.perfume_id = r.perfume_id ? m(r.perfume_id) : null;
           break;
       }
       return row;

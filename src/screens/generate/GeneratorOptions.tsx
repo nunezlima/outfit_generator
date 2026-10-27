@@ -1,63 +1,94 @@
-// Opciones antes de generar: preset, estilo objetivo, clima, prendas
-// participantes y prendas fijadas.
+// Opciones antes de generar: evento (y ocasión), estilo objetivo, clima de la
+// ropa, prendas participantes y prendas fijadas.
 
-import { Bookmark, ChevronDown, ChevronUp, CloudSun, Flame, Pin, Plus, Snowflake, SlidersHorizontal, X } from 'lucide-react';
-
-const WEATHER_ICON = { hot: Flame, mild: CloudSun, cold: Snowflake };
+import { ChevronDown, ChevronUp, CloudRain, Pin, Settings, SlidersHorizontal, Snowflake, Sun, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useGeneratorState } from '../../app/generatorState';
-import { usePresets } from '../../data/hooks';
-import { savePreset } from '../../data/repo';
-import { countParticipants } from '../../domain/generator';
-import { EMPTY_FILTERS, type Garment, type GeneratorFilters, type Preset, type UUID } from '../../domain/types';
+import { activeOccasion, countParticipants } from '../../domain/generator';
+import { WEATHER_LABELS, type Garment, type Occasion, type UUID } from '../../domain/types';
 import { useCatalogIndex } from '../../ui/CatalogContext';
 import { CheckBox, Chip, Segmented, Tabs } from '../../ui/common';
-import { useFeedback } from '../../ui/feedback';
 import { GarmentPicker } from '../../ui/GarmentPicker';
 import { GarmentCard, GarmentPhoto } from '../../ui/GarmentViews';
 import { Sheet } from '../../ui/Sheet';
 
-const sameFilters = (a: Partial<GeneratorFilters>, b: GeneratorFilters) => JSON.stringify({ ...EMPTY_FILTERS, ...a }) === JSON.stringify(b);
+const WEATHER_ICON = { sun: Sun, rain: CloudRain, cold: Snowflake };
 
 export function GeneratorOptions({ garments }: { garments: Garment[] }) {
   const idx = useCatalogIndex();
   const gen = useGeneratorState();
-  const presets = usePresets() ?? [];
   const [open, setOpen] = useState(false);
   const [participants, setParticipants] = useState(false);
   const [pinPicker, setPinPicker] = useState(false);
-  const [savingPreset, setSavingPreset] = useState(false);
   const f = gen.filters;
 
   const counts = useMemo(() => countParticipants({ garments, catalog: idx.catalog, filters: f }), [garments, idx.catalog, f]);
   const byId = useMemo(() => new Map(garments.map((g) => [g.id, g])), [garments]);
   const pinned = gen.pinned.map((id) => byId.get(id)).filter((g): g is Garment => !!g);
   const available = garments.filter((g) => g.status === 'available');
-  const activePreset = presets.find((p) => p.id === gen.presetId && sameFilters(p.config, f));
 
-  const update = (patch: Partial<GeneratorFilters>) => gen.setFilters({ ...f, ...patch }, null);
-  const applyPreset = (p: Preset | null) => (p ? gen.setFilters({ ...EMPTY_FILTERS, ...p.config }, p.id) : gen.setFilters(EMPTY_FILTERS, null));
+  const { events, occasions, styles } = idx.catalog;
+  const occasion = activeOccasion(idx.catalog, f);
+  const eventsWithOccasions = events.filter((e) => occasions.some((o) => o.event_id === e.id));
+  const activeEvent = occasion ? events.find((e) => e.id === occasion.event_id) : undefined;
+  const siblings = occasion ? occasions.filter((o) => o.event_id === occasion.event_id) : [];
+  const allowedIds = occasion && occasion.style_ids.length > 0 ? new Set(occasion.style_ids) : null;
+  const styleOptions = allowedIds ? styles.filter((s) => allowedIds.has(s.id)) : styles;
+
+  const update = (patch: Partial<typeof f>) => gen.setFilters({ ...f, ...patch });
+  const chooseOccasion = (o: Occasion | null) => {
+    // El estilo objetivo solo se conserva si la nueva ocasión lo permite.
+    const keepTarget = !o || !f.targetStyleId || o.style_ids.length === 0 || o.style_ids.includes(f.targetStyleId);
+    update({ occasionId: o?.id ?? null, targetStyleId: keepTarget ? f.targetStyleId : null });
+  };
+  const chooseEvent = (eventId: UUID) => {
+    const first = occasions.find((o) => o.event_id === eventId);
+    if (first) chooseOccasion(first);
+  };
 
   const summary: string[] = [];
   if (f.targetStyleId) summary.push(idx.styleById.get(f.targetStyleId)?.name ?? '');
-  if (f.weather) summary.push({ hot: 'Calor', mild: 'Templado', cold: 'Frío' }[f.weather]);
+  if (f.weather) summary.push(WEATHER_LABELS[f.weather]);
   summary.push(`${counts.eligible} de ${counts.available} prendas`);
 
   return (
     <div className="card stack">
-      <div className="chips scroll">
-        <Chip on={!activePreset && sameFilters(EMPTY_FILTERS, f)} onClick={() => applyPreset(null)}>
-          Todo
-        </Chip>
-        {presets.map((p) => (
-          <Chip key={p.id} on={activePreset?.id === p.id} onClick={() => applyPreset(p)}>
-            <Bookmark /> {p.name}
+      {eventsWithOccasions.length === 0 ? (
+        <p className="hint row" style={{ gap: 6 }}>
+          <Settings width={14} />
+          <span>
+            Crea tus eventos en <Link to="/ajustes/eventos">Ajustes → Eventos y perfumes</Link> para elegir estilos y perfume según la ocasión.
+          </span>
+        </p>
+      ) : (
+        <div className="chips scroll" role="group" aria-label="Evento">
+          <Chip on={!occasion} onClick={() => chooseOccasion(null)}>
+            Todo
           </Chip>
-        ))}
-        <Chip onClick={() => setSavingPreset(true)} title="Guardar la selección actual como preset">
-          <Plus /> Guardar preset
-        </Chip>
-      </div>
+          {eventsWithOccasions.map((e) => (
+            <Chip key={e.id} on={activeEvent?.id === e.id} onClick={() => chooseEvent(e.id)}>
+              {e.name}
+            </Chip>
+          ))}
+        </div>
+      )}
+
+      {siblings.length > 1 && (
+        <div className="chips" role="group" aria-label="Ocasión">
+          {siblings.map((o) => (
+            <Chip key={o.id} on={o.id === occasion?.id} onClick={() => chooseOccasion(o)}>
+              {o.name}
+            </Chip>
+          ))}
+        </div>
+      )}
+      {occasion && (
+        <p className="hint">
+          {siblings.length > 1 ? '' : `${occasion.name} · `}
+          {allowedIds ? `Estilos: ${idx.styleNames(occasion.style_ids).join(', ')}` : 'Cualquier estilo'}
+        </p>
+      )}
 
       <button type="button" className="spread" style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer' }} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         <span className="row small">
@@ -72,8 +103,8 @@ export function GeneratorOptions({ garments }: { garments: Garment[] }) {
           <div className="field">
             <label htmlFor="target-style">Estilo objetivo</label>
             <select id="target-style" className="select" value={f.targetStyleId ?? ''} onChange={(e) => update({ targetStyleId: e.target.value || null })}>
-              <option value="">Cualquiera (según las reglas)</option>
-              {idx.catalog.styles.map((s) => (
+              <option value="">{occasion && allowedIds ? 'Cualquiera de los del evento' : 'Cualquiera (según las reglas)'}</option>
+              {styleOptions.map((s) => (
                 <option key={s.id} value={s.id}>
                   Solo {s.name}
                 </option>
@@ -81,15 +112,15 @@ export function GeneratorOptions({ garments }: { garments: Garment[] }) {
             </select>
           </div>
           <div className="field">
-            <span className="label">Clima</span>
+            <span className="label">Clima (ropa)</span>
             <Segmented
-              label="Clima"
+              label="Clima de la ropa"
               value={f.weather}
               onChange={(weather) => update({ weather })}
               options={[
                 { value: null, label: 'Cualquiera' },
-                { value: 'hot', label: 'Calor' },
-                { value: 'mild', label: 'Templado' },
+                { value: 'sun', label: 'Sol' },
+                { value: 'rain', label: 'Lluvia' },
                 { value: 'cold', label: 'Frío' },
               ]}
             />
@@ -98,8 +129,8 @@ export function GeneratorOptions({ garments }: { garments: Garment[] }) {
                 const Icon = WEATHER_ICON[f.weather];
                 return <Icon width={14} />;
               })()}
-              {f.weather === 'hot' && 'Prendas de calor y de todo el año; sin capas encima.'}
-              {f.weather === 'mild' && 'Solo prendas de todo el año; capas opcionales.'}
+              {f.weather === 'sun' && 'Prendas de sol y de todo el año; sin capas encima.'}
+              {f.weather === 'rain' && 'Prendas de todo el año; siempre lleva capa exterior (la que tú prefieras).'}
               {f.weather === 'cold' && 'Prendas de frío y de todo el año; se agregan capas.'}
               {!f.weather && 'No filtra por clima.'}
             </span>
@@ -151,7 +182,6 @@ export function GeneratorOptions({ garments }: { garments: Garment[] }) {
           }}
         />
       )}
-      {savingPreset && <SavePresetSheet current={presets.find((p) => p.id === gen.presetId)} onClose={() => setSavingPreset(false)} />}
     </div>
   );
 }
@@ -163,7 +193,7 @@ function ParticipantsSheet({ garments, onClose }: { garments: Garment[]; onClose
   const f = gen.filters;
   const toggle = (key: 'excludedTypeIds' | 'excludedStyleIds' | 'excludedGarmentIds', id: UUID) => {
     const list = f[key];
-    gen.setFilters({ ...f, [key]: list.includes(id) ? list.filter((x) => x !== id) : [...list, id] }, null);
+    gen.setFilters({ ...f, [key]: list.includes(id) ? list.filter((x) => x !== id) : [...list, id] });
   };
   const setAll = (key: 'excludedTypeIds' | 'excludedStyleIds' | 'excludedGarmentIds', ids: UUID[], include: boolean) => {
     const set = new Set(f[key]);
@@ -171,7 +201,7 @@ function ParticipantsSheet({ garments, onClose }: { garments: Garment[]; onClose
       if (include) set.delete(id);
       else set.add(id);
     }
-    gen.setFilters({ ...f, [key]: [...set] }, null);
+    gen.setFilters({ ...f, [key]: [...set] });
   };
 
   return (
@@ -244,44 +274,6 @@ function ParticipantsSheet({ garments, onClose }: { garments: Garment[]; onClose
               })}
             </div>
           </>
-        )}
-      </div>
-    </Sheet>
-  );
-}
-
-function SavePresetSheet({ current, onClose }: { current?: Preset; onClose: () => void }) {
-  const gen = useGeneratorState();
-  const { toast } = useFeedback();
-  const [name, setName] = useState(current?.name ?? '');
-  const [overwrite, setOverwrite] = useState(!!current);
-  const save = async () => {
-    const p = await savePreset(name, gen.filters, overwrite ? current : undefined);
-    gen.setFilters(gen.filters, p.id);
-    toast(`Preset “${p.name}” guardado`);
-    onClose();
-  };
-  return (
-    <Sheet
-      title="Guardar preset"
-      onClose={onClose}
-      footer={
-        <button className="btn primary" disabled={!name.trim()} onClick={() => void save()}>
-          <Bookmark /> Guardar
-        </button>
-      }
-    >
-      <div className="stack">
-        <p className="muted small">Guarda el estilo objetivo, el clima y las prendas, tipos y estilos deseleccionados.</p>
-        <div className="field">
-          <label htmlFor="preset-name">Nombre</label>
-          <input id="preset-name" className="input" value={name} maxLength={60} placeholder="p. ej. Verano, Oficina" onChange={(e) => setName(e.target.value)} autoFocus />
-        </div>
-        {current && (
-          <button type="button" className="list-item" style={{ padding: '8px 0', borderBottom: 0 }} onClick={() => setOverwrite((v) => !v)}>
-            <CheckBox on={overwrite} />
-            <span>Reemplazar “{current.name}” (si no, se crea uno nuevo)</span>
-          </button>
         )}
       </div>
     </Sheet>

@@ -56,10 +56,10 @@ describe('capas del torso', () => {
     expect(seen.has('0-1')).toBe(true);
   });
 
-  it('en calor no sale la capa intermedia', () => {
+  it('con sol no sale la capa intermedia', () => {
     const gs = wardrobe();
     for (let seed = 1; seed <= 40; seed++) {
-      const rs = roles(generateOutfit(ctx(gs, { weather: 'hot' }, seed)), gs);
+      const rs = roles(generateOutfit(ctx(gs, { weather: 'sun' }, seed)), gs);
       expect(rs).not.toContain('mid');
       expect(rs).toContain('top');
     }
@@ -68,7 +68,7 @@ describe('capas del torso', () => {
   it('sin prendas ligeras disponibles, la intermedia va sola', () => {
     const gs = wardrobe().map((g) => (g.name.startsWith('Camiseta') ? { ...g, status: 'laundry' as const } : g));
     for (let seed = 1; seed <= 30; seed++) {
-      const rs = roles(generateOutfit(ctx(gs, { weather: 'hot' }, seed)), gs);
+      const rs = roles(generateOutfit(ctx(gs, { weather: 'sun' }, seed)), gs);
       expect(rs).toContain('mid');
       expect(rs).not.toContain('top');
     }
@@ -77,7 +77,7 @@ describe('capas del torso', () => {
   it('una intermedia fijada siempre aparece', () => {
     const gs = wardrobe();
     for (let seed = 1; seed <= 30; seed++) {
-      const r = generateOutfit(ctx(gs, { weather: 'hot' }, seed), { pinnedIds: [id('g:Suéter vino')] });
+      const r = generateOutfit(ctx(gs, { weather: 'sun' }, seed), { pinnedIds: [id('g:Suéter vino')] });
       if (!r.ok) throw new Error(r.message);
       expect(r.items.map((i) => i.garmentId)).toContain(id('g:Suéter vino'));
     }

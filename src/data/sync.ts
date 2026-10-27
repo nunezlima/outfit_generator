@@ -120,9 +120,12 @@ async function runOnce(): Promise<void> {
   setStatus({ phase: 'syncing', message: null });
   try {
     await push();
-    await pull();
+    const missing = await pull();
     await ensureCatalogSeeded();
-    setStatus({ phase: 'idle', lastSyncAt: Date.now(), message: null });
+    if (missing.length > 0) {
+      // La app es más nueva que la base: falta aplicar una migración. El resto sí se sincronizó.
+      setStatus({ phase: 'error', lastSyncAt: Date.now(), message: `El servidor aún no tiene: ${missing.join(', ')}. Falta aplicar la última migración de Supabase.` });
+    } else setStatus({ phase: 'idle', lastSyncAt: Date.now(), message: null });
   } catch (e) {
     const offline = isTransient(e);
     setStatus({
@@ -241,17 +244,29 @@ async function execute(run: OutboxOp[]): Promise<void> {
 const PAGE = 1000;
 const CURSOR_MARGIN_MS = 2 * 60_000;
 
-async function pull(): Promise<void> {
+/** ¿El error es "esa tabla no existe en el servidor"? (migración pendiente) */
+function isMissingTable(err: ErrLike | null | undefined): boolean {
+  return err?.code === 'PGRST205' || err?.code === '42P01' || /could not find the table|does not exist/i.test(err?.message ?? '');
+}
+
+/** Descarga cambios. Devuelve las tablas que el servidor todavía no tiene. */
+async function pull(): Promise<TableName[]> {
   const sb = supabase!;
+  const missing: TableName[] = [];
   for (const table of SYNC_TABLES) {
     const cursor = (await getMeta<string>(`cursor:${table}`)) ?? null;
     const since = cursor ? new Date(new Date(cursor).getTime() - CURSOR_MARGIN_MS).toISOString() : null;
     let maxSeen = cursor;
+    let absent = false;
     for (let from = 0; ; from += PAGE) {
       let q = sb.from(table).select('*').order('updated_at', { ascending: true });
       for (const c of REMOTE_CONFLICT[table].split(',')) q = q.order(c, { ascending: true });
       if (since) q = q.gt('updated_at', since);
       const { data, error, status: st } = await q.range(from, from + PAGE - 1);
+      if (error && isMissingTable(error)) {
+        absent = true;
+        break;
+      }
       if (error) throw classify(error, st);
       const rows = (data ?? []) as Record<string, unknown>[];
       if (rows.length > 0) {
@@ -261,8 +276,14 @@ async function pull(): Promise<void> {
       }
       if (rows.length < PAGE) break;
     }
+    if (absent) {
+      // Sin avanzar el cursor: se descarga completa cuando exista.
+      missing.push(table);
+      continue;
+    }
     if (maxSeen && maxSeen !== cursor) await setMeta(`cursor:${table}`, maxSeen);
   }
+  return missing;
 }
 
 async function applyRemoteRows(table: TableName, rows: Record<string, unknown>[]): Promise<void> {

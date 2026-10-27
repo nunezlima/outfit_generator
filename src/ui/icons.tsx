@@ -1,4 +1,4 @@
-// Íconos por posición del outfit (lucide + dos propios que lucide no tiene).
+// Íconos por posición del outfit (lucide + propios que lucide no tiene).
 
 import { Layers, Layers2, Shirt, SportShoe, Watch, type LucideProps } from 'lucide-react';
 import type { ComponentType } from 'react';
@@ -18,6 +18,18 @@ export function DressIcon(props: LucideProps) {
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...(props as object)}>
       <path d="M9 3h6l-1.2 5.5L19 21H5l5.2-12.5z" />
       <path d="M9.5 8.5h5" />
+    </svg>
+  );
+}
+
+/** Frasco de perfume. */
+export function PerfumeIcon(props: LucideProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...(props as object)}>
+      <path d="M9.5 2.5h5v3h-5z" />
+      <path d="M11 5.5v2.5M13 5.5v2.5" />
+      <rect x="5" y="8" width="14" height="13.5" rx="3.5" />
+      <path d="M9 14.5h6" />
     </svg>
   );
 }

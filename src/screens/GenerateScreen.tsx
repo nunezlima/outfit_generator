@@ -7,21 +7,23 @@
 
 import { useLiveQuery } from 'dexie-react-hooks';
 import { CalendarCheck, Lock, LockOpen, Palette, Plus, RefreshCw, Save, Settings, Shapes, Shirt, Sparkles, TriangleAlert, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useWardrobeAnalysis } from '../app/analysisHook';
 import { useGeneratorState } from '../app/generatorState';
 import { getDB } from '../data/db';
-import { useGarments, useUsage } from '../data/hooks';
+import { useGarments, usePerfumes, useUsage } from '../data/hooks';
 import { logEvent } from '../data/repo';
 import { loadSampleData } from '../data/sample';
 import { colorAdvice } from '../domain/colors';
-import { generateOutfit, pickForPosition, type GenerationFailure, type GeneratorContext, type OutfitItem } from '../domain/generator';
-import type { Garment, Position } from '../domain/types';
+import { activeOccasion, generateOutfit, pickForPosition, type GenerationFailure, type GeneratorContext, type OutfitItem } from '../domain/generator';
+import { hasAlternative, nextPerfume, rankLabel, suggestPerfume, type PerfumeContext } from '../domain/perfumes';
+import { PERFUME_CLIMATE_LABELS, type Garment, type Perfume, type PerfumeClimate, type Position } from '../domain/types';
 import { useCatalogIndex } from '../ui/CatalogContext';
-import { EmptyState, Loading, Page } from '../ui/common';
+import { EmptyState, Loading, Page, Segmented } from '../ui/common';
 import { useFeedback } from '../ui/feedback';
 import { GarmentPhoto } from '../ui/GarmentViews';
+import { PerfumeIcon } from '../ui/icons';
 import { SaveOutfitSheet, WearSheet } from '../ui/OutfitSheets';
 import { GeneratorOptions } from './generate/GeneratorOptions';
 
@@ -116,6 +118,21 @@ function Generator({ garments }: { garments: Garment[] }) {
 
   const byId = useMemo(() => new Map(garments.map((g) => [g.id, g])), [garments]);
   const ctx: GeneratorContext = useMemo(() => ({ garments, catalog: idx.catalog, filters: gen.filters, usage }), [garments, idx.catalog, gen.filters, usage]);
+  const perfumes = usePerfumes();
+  const occasion = activeOccasion(idx.catalog, gen.filters);
+  const pctx: PerfumeContext = useMemo(() => ({ occasion, occasions: idx.catalog.occasions, perfumes: perfumes ?? [] }), [occasion, idx.catalog.occasions, perfumes]);
+  const perfumeById = useMemo(() => new Map((perfumes ?? []).map((p) => [p.id, p])), [perfumes]);
+  const currentPerfume = gen.perfume ? perfumeById.get(gen.perfume.perfumeId) : undefined;
+
+  // Si hay outfit pero aún no hay perfume (p. ej. los perfumes cargaron después,
+  // o borraste el que se mostraba), sugerir el principal.
+  const hasOutfit = !!gen.result?.ok;
+  const { perfume: shownPick, perfumeClimate, setPerfume } = gen;
+  useEffect(() => {
+    if (!hasOutfit || !perfumes || currentPerfume) return;
+    const s = suggestPerfume(pctx, perfumeClimate);
+    if (s && s.perfumeId !== shownPick?.perfumeId) setPerfume(s);
+  }, [hasOutfit, perfumes, currentPerfume, pctx, perfumeClimate, shownPick, setPerfume]);
   const key = JSON.stringify({ f: gen.filters, p: gen.pinned });
   const result = gen.result;
   const items = result?.ok ? result.items.filter((i) => byId.has(i.garmentId)) : [];
@@ -132,6 +149,8 @@ function Generator({ garments }: { garments: Garment[] }) {
     const r = generateOutfit(ctx, { pinnedIds: [...chosenByUser], previousIds: previous });
     gen.setResult(r, key);
     if (r.ok) void logEvent('shown', r.items.map((i) => i.garmentId).filter((id) => !chosenByUser.has(id)));
+    // El perfume siempre empieza por el principal (salvo que lo hayas bloqueado).
+    if (r.ok && !(gen.perfumeLocked && currentPerfume)) gen.setPerfume(suggestPerfume(pctx, gen.perfumeClimate));
   };
 
   const setItems = (next: OutfitItem[]) => {
@@ -218,6 +237,7 @@ function Generator({ garments }: { garments: Garment[] }) {
               </div>
             );
           })}
+          {perfumes && perfumes.length > 0 && <PerfumeRow perfume={currentPerfume} ctx={pctx} />}
           {addable.length > 0 && (
             <div className="outfit-add">
               {addable.map((p) => (
@@ -266,13 +286,83 @@ function Generator({ garments }: { garments: Garment[] }) {
           garmentIds={ids}
           outfitId={null}
           defaultName={defaultName(items, byId, idx.positionById)}
+          perfume={currentPerfume ? { id: currentPerfume.id, name: currentPerfume.name } : null}
           onClose={() => setWearing(false)}
           onDone={() => {
             gen.setResult(null);
             gen.setLocked([]);
+            gen.setPerfume(null);
             toast('¡Listo! Genera otro cuando quieras.');
           }}
         />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Fila del perfume, al final del outfit. El clima del perfume (calor,
+ * templado, frío) es independiente del clima de la ropa: empieza según el mes
+ * y lo cambias aquí. Regenerar pasa al secundario de la misma lista.
+ */
+function PerfumeRow({ perfume, ctx }: { perfume: Perfume | undefined; ctx: PerfumeContext }) {
+  const gen = useGeneratorState();
+  const { toast } = useFeedback();
+  const pick = perfume ? gen.perfume : null;
+  const locked = gen.perfumeLocked && !!pick;
+
+  const chooseClimate = (c: PerfumeClimate) => {
+    gen.setPerfumeClimate(c);
+    gen.setPerfume(suggestPerfume(ctx, c));
+  };
+  const regenerate = () => {
+    if (!pick) return;
+    const next = nextPerfume(ctx, pick);
+    if (next) gen.setPerfume(next);
+    else toast('No hay otro perfume para este evento y clima.');
+  };
+
+  let detail: string;
+  if (!pick) detail = ctx.occasion ? `“${ctx.occasion.name}” no tiene perfumes asignados.` : 'No hay perfumes disponibles.';
+  else if (pick.climate !== pick.requested)
+    detail = `${rankLabel(pick)} · No hay de ${PERFUME_CLIMATE_LABELS[pick.requested].toLowerCase()} para este evento; uno de ${PERFUME_CLIMATE_LABELS[pick.climate].toLowerCase()}`;
+  else detail = `${rankLabel(pick)} · ${PERFUME_CLIMATE_LABELS[pick.climate]}`;
+
+  return (
+    <div className={`outfit-item perfume-item${locked ? ' locked' : ''}`}>
+      <div className="photo thumb lg">
+        <div className="placeholder">
+          <PerfumeIcon />
+        </div>
+      </div>
+      <div className="grow stack" style={{ gap: 2, minWidth: 0 }}>
+        <div className="pos">Perfume</div>
+        {perfume && pick ? <div className="name">{perfume.name}</div> : <Link to="/ajustes/eventos" className="small">Asignar perfumes</Link>}
+        <div className="tiny muted">{detail}</div>
+        <div className="perfume-climate">
+          <Segmented<PerfumeClimate>
+            label="Clima del perfume"
+            value={gen.perfumeClimate}
+            onChange={(c) => !locked && chooseClimate(c)}
+            options={(['hot', 'mild', 'cold'] as PerfumeClimate[]).map((c) => ({ value: c, label: PERFUME_CLIMATE_LABELS[c] }))}
+          />
+        </div>
+      </div>
+      {pick && (
+        <div className="actions">
+          <button
+            className={`icon-btn${locked ? ' on' : ''}`}
+            aria-pressed={locked}
+            aria-label={locked ? 'Desbloquear perfume' : 'Bloquear perfume'}
+            title={locked ? 'Bloqueado' : 'Bloquear'}
+            onClick={() => gen.setPerfumeLocked(!locked)}
+          >
+            {locked ? <Lock /> : <LockOpen />}
+          </button>
+          <button className="icon-btn" aria-label="Otro perfume" title="Siguiente opción (secundario)" onClick={regenerate} disabled={locked || !hasAlternative(ctx, pick)}>
+            <RefreshCw />
+          </button>
+        </div>
       )}
     </div>
   );

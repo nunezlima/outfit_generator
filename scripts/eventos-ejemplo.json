@@ -1,0 +1,25 @@
+{
+  "renombrarEstilos": { "Running": "Correr" },
+  "perfumes": [
+    { "nombre": "Perfume cítrico", "notas": "Fresco, para calor" },
+    { "nombre": "Perfume de ámbar", "notas": "Cálido, para frío" }
+  ],
+  "eventos": [
+    {
+      "nombre": "Pulcro",
+      "ocasiones": [
+        {
+          "nombre": "Oficina",
+          "estilos": ["Formal", "Semiformal"],
+          "calor": ["Perfume cítrico"],
+          "templado": ["Perfume cítrico", "Perfume de ámbar"],
+          "frio": ["Perfume de ámbar"]
+        }
+      ]
+    },
+    {
+      "nombre": "Ejercicio",
+      "ocasiones": [{ "nombre": "Deportivo", "estilos": ["Correr"], "todos": ["Perfume cítrico"] }]
+    }
+  ]
+}

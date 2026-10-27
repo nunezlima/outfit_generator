@@ -5,7 +5,8 @@ combinaciones que tengan sentido. Funciona sin conexión y se sincroniza sola
 con Supabase cuando vuelve internet.
 
 - **Prendas** con foto (cámara o galería, comprimida a ≤1200 px), tipo, estilos, color, abrigo, usos antes de lavar, estado y notas. Alta rápida con “Guardar y agregar otra”.
-- **Generador de outfits** con reglas de compatibilidad en 3 niveles, presets, estilo objetivo, clima, prendas fijadas o bloqueadas, cambio por posición y una rotación que favorece lo que no has usado.
+- **Generador de outfits** con reglas de compatibilidad en 3 niveles, **eventos** (cada ocasión decide qué estilos se permiten), estilo objetivo, clima de la ropa (sol, lluvia, frío), prendas fijadas o bloqueadas, cambio por posición y una rotación que favorece lo que no has usado.
+- **Perfume del outfit**: cada ocasión tiene perfumes para calor, templado y frío (principal y secundarios). El clima del perfume se sugiere según el mes y es independiente del de la ropa.
 - **Outfits guardados** con favoritos, etiquetas, fotos tuyas usándolos y aviso de “no disponible”.
 - **Cesto de ropa sucia** automático, **calendario** de lo que te pusiste y **análisis** de prendas evitadas o poco usadas, con un resumen mensual.
 - **Respaldo** completo (datos + fotos) en un `.zip`.
@@ -64,6 +65,8 @@ Todo el esquema está versionado en [`supabase/migrations`](supabase/migrations)
 | `…0001_esquema_inicial.sql` | Tablas, índices, *triggers* y **Row Level Security** con políticas “solo el dueño” |
 | `…0002_storage_fotos.sql` | Bucket **privado** `wardrobe` y sus políticas (cada quien solo su carpeta) |
 | `…0003_catalogo_inicial.sql` | Función que crea tus categorías y reglas iniciales la primera vez que entras |
+| `…0929000001_clima_y_capa_intermedia.sql` | Clima por prenda y capa intermedia |
+| `…1027000001_eventos_y_perfumes.sql` | Eventos, ocasiones, perfumes y el perfume del día en el historial |
 
 Elige **una** de estas dos formas:
 
@@ -228,6 +231,7 @@ npm run dev               # abre http://localhost:5173
 | `npm run lint` | Revisión de estilo (oxlint) |
 | `npm run build` | Compila la versión de producción en `dist/` |
 | `node scripts/importar-inventario.mjs archivo.csv` | Muestra qué importaría de un inventario CSV (agrega `--aplicar` para escribirlo) |
+| `node scripts/importar-eventos.mjs archivo.json` | Muestra qué cargaría de tus eventos, ocasiones y perfumes (agrega `--aplicar` para escribirlo) |
 
 ### Importar tu inventario desde un CSV
 
@@ -240,6 +244,19 @@ contraseña y la clave pública, así que RLS aplica igual que en la app.
 3. Si el plan se ve bien, repite con `--aplicar`. Correrlo otra vez no duplica prendas.
 
 Las columnas esperadas están documentadas al inicio del script.
+
+### Cargar tus eventos y perfumes desde un JSON
+
+`scripts/importar-eventos.mjs` hace lo mismo para los eventos del generador:
+crea o actualiza eventos, ocasiones (estilos permitidos y perfumes por clima)
+y perfumes, y puede renombrar estilos. El formato está al inicio del script y
+hay un ejemplo en [`scripts/eventos-ejemplo.json`](scripts/eventos-ejemplo.json).
+
+1. Guarda tu JSON en `datos-privados/` (ignorada por Git).
+2. `node scripts/importar-eventos.mjs datos-privados/eventos.json` → muestra el plan.
+3. Si se ve bien, repite con `--aplicar`. Correrlo otra vez actualiza en lugar de duplicar.
+
+También puedes editarlo todo en la app: *Ajustes → Eventos y perfumes*.
 
 ### Estructura
 
@@ -271,7 +288,7 @@ docs/DISENO.md   Propuesta de diseño
 
 Cuando algo se bloquea, la app dice qué regla lo impide, p. ej. *“Regla de tipos: Pantalón de vestir + Chanclas no se combinan.”*
 
-**Generador:** filtra (cesto, archivadas, deseleccionadas, estilo objetivo, clima), elige estructura (superior + inferior, o pieza completa) y llena las posiciones con una búsqueda con retroceso que prueba candidatas en **orden aleatorio ponderado**. El peso favorece lo que no usas hace tiempo (una prenda de ayer sale ~6 veces menos que una olvidada, pero puede salir) y baja un poco las prendas muy rechazadas. Si no hay combinación posible, explica la causa, p. ej. *“No hay calzado disponible con estilo Formal: 2 en el cesto, 3 no son de estilo Formal.”*
+**Generador:** filtra (cesto, archivadas, deseleccionadas, estilos del evento, estilo objetivo, clima), elige estructura (superior + inferior, o pieza completa) y llena las posiciones con una búsqueda con retroceso que prueba candidatas en **orden aleatorio ponderado**. El peso favorece lo que no usas hace tiempo (una prenda de ayer sale ~6 veces menos que una olvidada, pero puede salir) y baja un poco las prendas muy rechazadas. Si no hay combinación posible, explica la causa, p. ej. *“No hay calzado disponible con estilo Formal: 2 en el cesto, 3 no son de estilo Formal.”*
 
 **Prendas evitadas:** tasa de rechazo = (rechazos fuertes + débiles × 0.25) ÷ veces mostrada, y solo cuenta tras un mínimo de apariciones (5 por defecto). Cambiar una prenda con su botón es un rechazo fuerte; regenerar todo el outfit, uno débil para cada prenda no bloqueada.
 

@@ -53,9 +53,12 @@ futuro, actualiza también este archivo.
 | **Compatibilidad de estilos** (`style_compat`) | Nivel 1: celda de la matriz estilo × estilo. |
 | **Regla de tipos** (`type_rules`) | Nivel 2: par de tipos permitido o prohibido. |
 | **Regla de prendas** (`garment_rules`) | Nivel 3: excepción entre dos prendas concretas. |
-| **Preset** (`presets`) | Selección guardada de filtros del generador ("Verano", "Oficina"). |
+| **Evento** (`outfit_events`) | Botón del generador (Ejercicio, Pulcro, Íntimo…). Agrupa ocasiones. Reemplazó a los presets. |
+| **Ocasión** (`occasions`) | Dentro de un evento (Pulcro → "Oficina", "Paseo / Reunión familiar"). Decide los **estilos permitidos** y los **perfumes** de cada clima (calor, templado, frío), en orden: el primero es el principal. |
+| **Perfume** (`perfumes`) | Tu colección. Archivado = ya no se sugiere. |
+| **Preset** (`presets`) | *Ya no se usa en la interfaz* (lo reemplazaron los eventos); la tabla se conserva. |
 | **Outfit guardado** (`outfits`) | Nombre, etiquetas, prendas, favorito, fotos tuyas usándolo. |
-| **Registro de uso** (`wear_log`) | Qué te pusiste qué día (alimenta el calendario y las estadísticas). |
+| **Registro de uso** (`wear_log`) | Qué te pusiste qué día, y con qué perfume (alimenta el calendario y las estadísticas). |
 | **Eventos** (`garment_events`) | Mostrada / rechazo fuerte / rechazo débil, para detectar prendas evitadas. |
 | **Ajustes** (`user_settings`) | Días "sin usar", mínimo de apariciones, peso del rechazo débil, último resumen visto. |
 
@@ -114,11 +117,16 @@ garments       (id pk, user_id, name, type_id → garment_types,
 style_compat   (pk(user_id, style_a, style_b), compatible bool)   -- a < b
 type_rules     (pk(user_id, type_a, type_b), allowed bool)         -- a < b
 garment_rules  (pk(user_id, garment_a, garment_b), allowed bool)   -- a < b
-presets        (id pk, user_id, name, config jsonb, sort_order)
+presets        (id pk, user_id, name, config jsonb, sort_order)     -- sin uso
+outfit_events  (id pk, user_id, name, sort_order)
+occasions      (id pk, user_id, event_id → outfit_events, name, style_ids uuid[],
+                perfumes_hot uuid[], perfumes_mild uuid[], perfumes_cold uuid[],
+                sort_order)
+perfumes       (id pk, user_id, name, notes, status)
 outfits        (id pk, user_id, name, tags text[], garment_ids uuid[],
                 favorite, photo_paths text[], notes)
 wear_log       (id pk, user_id, worn_on date, garment_ids uuid[],
-                outfit_id → outfits)
+                outfit_id → outfits, perfume_id → perfumes)
 garment_events (id pk, user_id, kind, garment_ids uuid[])
 user_settings  (user_id pk, prefs jsonb)
 ```
@@ -190,21 +198,26 @@ combinan."*
 ## 6. Lógica del generador
 
 ### Entradas
-Prendas, catálogo, reglas, estadísticas de uso y opciones:
-prendas/tipos/estilos excluidos, estilo objetivo, clima, prendas fijadas
-(o bloqueadas) y prendas a evitar (la que se está cambiando).
+Prendas, catálogo (con eventos y ocasiones), reglas, estadísticas de uso y
+opciones: ocasión, prendas/tipos/estilos excluidos, estilo objetivo, clima,
+prendas fijadas (o bloqueadas) y prendas a evitar (la que se está cambiando).
 
 ### Paso 1 — Filtrar candidatas (guardando el motivo de cada descarte)
 - Estado distinto de *disponible* → fuera (cesto / archivada).
 - Prenda, tipo o todos sus estilos deseleccionados → fuera.
-- Estilo objetivo: la prenda debe tenerlo.
-- Clima (según el campo `climate` de cada prenda: calor, todo el año o frío).
-  El nivel de abrigo ya no filtra: solo describe la capa.
+- Ocasión: los estilos que no permite cuentan como deseleccionados (también al
+  comparar pares). Una prenda que se queda sin estilos permitidos sale, con el
+  motivo *"no es de los estilos de «Oficina»"*. Ocasión sin estilos = no
+  restringe. Prendas sin estilo = comodín.
+- Estilo objetivo: la prenda debe tenerlo (en la interfaz solo se ofrecen los
+  estilos de la ocasión).
+- Clima (según el campo `climate` de cada prenda: sol —guardado como `hot`—,
+  todo el año o frío). El nivel de abrigo no filtra: solo describe la capa.
 
-| Clima del día | Prendas que participan | Capas |
+| Clima de la ropa | Prendas que participan | Capas |
 |---|---|---|
-| Calor | calor + todo el año | sin capa intermedia ni exterior |
-| Templado | solo todo el año | intermedia 40 %, exterior 50 % |
+| Sol | sol + todo el año | sin capa intermedia ni exterior |
+| Lluvia | todo el año (en capa exterior, también las de frío) | **capa exterior obligatoria** (cualquiera); intermedia 40 % |
 | Frío | frío + todo el año | intermedia 85 %, exterior 100 % |
 | Sin clima | todas | intermedia 35 %, exterior 35 % |
 
@@ -302,3 +315,29 @@ Marcar un outfit como usado: +1 a `uses_since_wash` de cada prenda; si llega a
 Exportar = ZIP con `data.json` (todas las tablas) + carpeta `photos/`.
 Importar = *upsert* de todo (reescribiendo `user_id` y la carpeta de las fotos
 al usuario actual) y subida de fotos.
+
+---
+
+## 10. Perfume del outfit
+
+El perfume va al final del outfit (después de los accesorios). Depende de la
+**ocasión** y del **clima del perfume** (calor, templado, frío), que es
+**independiente** del clima de la ropa: un día de sol en diciembre no cambia
+que el perfume sea de frío.
+
+- **Clima sugerido por mes**: calor de marzo a junio, templado de julio a
+  octubre, frío de noviembre a febrero. Se cambia con un selector en la misma
+  fila del perfume.
+- **Principal primero**: al generar se muestra el primero de la lista de esa
+  ocasión y clima. "Otro perfume" pasa a los secundarios en orden y vuelve al
+  principal. Se puede bloquear (se conserva al regenerar el outfit).
+- **Sin perfume para ese clima**: se usa el clima más cercano que tenga
+  (templado → frío → calor; calor → templado → frío; frío → templado → calor)
+  y se avisa. Ej.: "De Negro" solo tiene frío.
+- **Sin ocasión ("Todo")**: uno al azar entre los asignados a ese clima en
+  cualquier ocasión (o entre todos, si no hay).
+- Los perfumes **archivados** no se sugieren.
+- **"Lo usé hoy"** guarda el perfume en `wear_log.perfume_id` (se puede
+  desmarcar).
+
+Lógica pura en `src/domain/perfumes.ts`, con pruebas.

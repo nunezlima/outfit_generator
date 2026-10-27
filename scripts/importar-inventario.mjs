@@ -21,7 +21,7 @@
 //              chamarra | calzado | accesorio
 //   · capa:    ligero | medio | abrigador (solo torso; vacío = según el tipo)
 //   · subtipo: para accesorios: cadena | reloj | gorra | anillo
-//   · clima:   calor | templado | frio        (templado = todo el año)
+//   · clima:   sol | templado | frio          (templado = todo el año; "calor" = sol)
 //   · estilos: separados por "|", p. ej. "Semiformal|Minimalista"
 //   · color:   clave de la paleta de la app (negro, azul_marino, …) o vacío
 //
@@ -91,7 +91,7 @@ const INCOMPATIBLE = [
   ['Vacacional', 'Running'], ['Vacacional', 'Gym'],
 ];
 
-const CLIMATE = { calor: 'hot', templado: 'all', frio: 'cold', 'frío': 'cold' };
+const CLIMATE = { sol: 'hot', calor: 'hot', templado: 'all', frio: 'cold', 'frío': 'cold' };
 const WARMTH = { ligero: 'light', medio: 'medium', abrigador: 'warm' };
 const COLORS = new Set(['negro', 'blanco', 'gris', 'plateado', 'gris_oscuro', 'beige', 'cafe', 'cafe_claro', 'caqui', 'azul_marino', 'mezclilla', 'verde_olivo', 'rojo', 'ladrillo', 'vino', 'rosa', 'lila', 'morado', 'azul', 'celeste', 'turquesa', 'menta', 'verde', 'verde_bandera', 'amarillo', 'mostaza', 'naranja', 'multicolor']);
 

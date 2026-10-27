@@ -13,8 +13,11 @@ describe('respaldo: reasignación de id al restaurar', () => {
     type_rules: [row({ type_a: 't1', type_b: 't2', allowed: false })],
     garment_rules: [row({ garment_a: 'g1', garment_b: 'g2', allowed: true })],
     presets: [row({ id: 'pr1', config: { excludedTypeIds: ['t1'], excludedStyleIds: [], excludedGarmentIds: ['g2'], targetStyleId: 's2', weather: 'hot' } })],
+    outfit_events: [row({ id: 'ev1', name: 'Pulcro', sort_order: 10 })],
+    perfumes: [row({ id: 'pf1', name: 'Prada L’Homme', notes: null, status: 'available' })],
+    occasions: [row({ id: 'oc1', event_id: 'ev1', name: 'Oficina', style_ids: ['s1'], perfumes_hot: [], perfumes_mild: ['pf1'], perfumes_cold: ['pf1'], sort_order: 10 })],
     outfits: [row({ id: 'o1', garment_ids: ['g1', 'g2'] })],
-    wear_log: [row({ id: 'w1', garment_ids: ['g1'], outfit_id: 'o1' })],
+    wear_log: [row({ id: 'w1', garment_ids: ['g1'], outfit_id: 'o1', perfume_id: 'pf1' })],
     garment_events: [row({ id: 'e1', kind: 'shown', garment_ids: ['g2'] })],
     user_settings: [row({ prefs: {} })],
   };
@@ -37,6 +40,13 @@ describe('respaldo: reasignación de id al restaurar', () => {
     expect(String(gr.garment_a) < String(gr.garment_b)).toBe(true);
     expect(out.outfits![0].garment_ids).toEqual([g1, g2]);
     expect(out.wear_log![0].outfit_id).toBe(id('outfits'));
+    expect(out.wear_log![0].perfume_id).toBe(id('perfumes'));
+    const oc = out.occasions![0];
+    expect(oc.id).not.toBe('oc1');
+    expect(oc.event_id).toBe(id('outfit_events'));
+    expect(oc.style_ids).toEqual([id('styles', 0)]);
+    expect(oc.perfumes_mild).toEqual([id('perfumes')]);
+    expect(oc.perfumes_cold).toEqual([id('perfumes')]);
     expect(out.garment_events![0].garment_ids).toEqual([g2]);
     const cfg = out.presets![0].config as Record<string, unknown>;
     expect(cfg.excludedTypeIds).toEqual([id('garment_types', 0)]);
