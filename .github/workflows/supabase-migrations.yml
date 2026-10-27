@@ -49,11 +49,28 @@ jobs:
         with:
           version: latest
 
+      # Si un paso falla, sus últimas líneas se publican como anotación de
+      # error (visibles en el resumen de la ejecución, sin abrir el registro).
       - name: Vincular el proyecto
-        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+        run: |
+          set -o pipefail
+          if ! supabase link --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee link.log; then
+            echo "::error title=supabase link falló::$(tail -n 6 link.log | tr '\n' ' ')"
+            exit 1
+          fi
 
       - name: Ver qué se va a aplicar
-        run: supabase db push --dry-run
+        run: |
+          set -o pipefail
+          if ! supabase db push --dry-run 2>&1 | tee dry.log; then
+            echo "::error title=supabase db push --dry-run falló::$(tail -n 6 dry.log | tr '\n' ' ')"
+            exit 1
+          fi
 
       - name: Aplicar migraciones nuevas
-        run: supabase db push --yes --skip-vault
+        run: |
+          set -o pipefail
+          if ! supabase db push --yes --skip-vault 2>&1 | tee push.log; then
+            echo "::error title=supabase db push falló::$(tail -n 6 push.log | tr '\n' ' ')"
+            exit 1
+          fi
