@@ -28,6 +28,10 @@
   --radius-sm: 10px;
   --nav-h: 64px;
   --header-h: 56px;
+  /* Ancho de la columna de contenido; cabecera, navegación y botones flotantes se alinean a ella. */
+  --content-max: 760px;
+  /* Área de toque mínima en pantallas táctiles (Apple 44 pt; WCAG 2.2 AA pide 24 px). */
+  --touch-min: 44px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
@@ -173,7 +177,8 @@ p {
   top: 0;
   z-index: 20;
   height: calc(var(--header-h) + env(safe-area-inset-top, 0px));
-  padding: env(safe-area-inset-top, 0px) 8px 0 16px;
+  /* En pantallas anchas el título y los botones se alinean con la columna de contenido. */
+  padding: env(safe-area-inset-top, 0px) max(8px, calc((100% - var(--content-max)) / 2 + 8px)) 0 max(16px, calc((100% - var(--content-max)) / 2 + 16px));
   display: flex;
   align-items: center;
   gap: 8px;
@@ -198,7 +203,7 @@ p {
 .main {
   flex: 1;
   width: 100%;
-  max-width: 760px;
+  max-width: var(--content-max);
   margin: 0 auto;
   padding: 16px 16px calc(var(--nav-h) + var(--safe-bottom) + 24px);
 }
@@ -209,6 +214,8 @@ p {
   z-index: 30;
   height: calc(var(--nav-h) + var(--safe-bottom));
   padding-bottom: var(--safe-bottom);
+  /* La barra ocupa todo el ancho, pero las pestañas quedan bajo la columna de contenido. */
+  padding-inline: max(0px, calc((100% - var(--content-max)) / 2));
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
@@ -224,7 +231,7 @@ p {
   align-items: center;
   justify-content: center;
   gap: 3px;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 550;
   color: var(--text-muted);
   text-decoration: none;
@@ -270,7 +277,7 @@ p {
   border-radius: 9px;
   background: var(--accent);
   color: var(--accent-contrast);
-  font-size: 0.66rem;
+  font-size: 0.75rem;
   font-weight: 700;
   line-height: 18px;
   text-align: center;
@@ -600,7 +607,7 @@ a.list-item:active {
 
 .fab {
   position: fixed;
-  right: max(16px, calc(50% - 380px + 16px));
+  right: max(16px, calc(50% - var(--content-max) / 2 + 16px));
   bottom: calc(var(--nav-h) + var(--safe-bottom) + 16px);
   z-index: 25;
   width: 58px;
@@ -715,6 +722,7 @@ a.list-item:active {
 }
 
 .number-stepper input {
+  align-self: stretch;
   width: 52px;
   border: 0;
   background: transparent;
@@ -797,7 +805,8 @@ a.list-item:active {
   overflow-x: auto;
   scrollbar-width: none;
   margin: 0 -16px;
-  padding: 2px 16px;
+  /* 4 px arriba y abajo: el desplazamiento recorta, y así cabe el área de toque ampliada de los chips. */
+  padding: 4px 16px;
 }
 
 .chips.scroll::-webkit-scrollbar {
@@ -896,7 +905,7 @@ a.list-item:active {
   gap: 4px;
   padding: 2px 8px;
   border-radius: 999px;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 650;
   background: var(--surface-2);
   color: var(--text-muted);
@@ -1071,7 +1080,7 @@ a.list-item:active {
   gap: 6px;
   text-align: center;
   padding: 4px;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -1139,7 +1148,7 @@ a.list-item:active {
 }
 
 .outfit-item .pos {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -1162,6 +1171,8 @@ a.list-item:active {
 .outfit-item .actions {
   display: flex;
   flex: none;
+  /* 38 px + 3 px de área ampliada por lado: con 6 px de separación no se pisan. */
+  gap: 6px;
 }
 
 .outfit-item .actions .icon-btn {
@@ -1403,7 +1414,7 @@ a.list-item:active {
   border-radius: 999px;
   background: var(--surface-2);
   color: var(--text-muted);
-  font-size: 0.74rem;
+  font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -1453,7 +1464,7 @@ a.list-item:active {
 
 .calendar .dow {
   text-align: center;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 650;
   color: var(--text-muted);
   padding: 4px 0;
@@ -1783,7 +1794,7 @@ a.list-item:active {
 }
 
 .level-tag {
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -1795,6 +1806,27 @@ a.list-item:active {
   *::after {
     animation: none !important;
     transition: none !important;
+  }
+}
+
+/* ─── Pantallas táctiles: área de toque de 44 px ─────────────────────────
+   Los botones compactos conservan su tamaño visible; un área invisible los
+   amplía solo hacia donde miden menos de --touch-min. :where() no suma
+   especificidad, así que cualquier regla que ya posicione el botón gana. */
+@media (pointer: coarse) {
+  :where(.icon-btn, .btn.sm, .chip, .sync-pill, button.spread, .segmented button, .row-main, .matrix-cell) {
+    position: relative;
+  }
+
+  :where(.icon-btn, .btn.sm, .chip, .sync-pill, button.spread, .segmented button, .row-main, .matrix-cell)::after {
+    content: '';
+    position: absolute;
+    inset: min(0px, calc((100% - var(--touch-min)) / 2));
+  }
+
+  /* Un <input> no admite ::after: el control numérico entero crece a 44 px. */
+  .number-stepper {
+    min-height: var(--touch-min);
   }
 }
 
@@ -1826,8 +1858,8 @@ a.list-item:active {
 
 .select-bar {
   position: fixed;
-  left: max(12px, calc(50% - 380px + 12px));
-  right: max(12px, calc(50% - 380px + 12px));
+  left: max(12px, calc(50% - var(--content-max) / 2 + 12px));
+  right: max(12px, calc(50% - var(--content-max) / 2 + 12px));
   bottom: calc(var(--nav-h) + var(--safe-bottom) + 12px);
   z-index: 25;
   display: flex;

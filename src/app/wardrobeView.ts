@@ -53,3 +53,13 @@ export function rememberWardrobeScroll(scrollY: number) {
 export function wardrobePath(): string {
   return view.search ? `/guardarropa?${view.search}` : '/guardarropa';
 }
+
+/** Al cerrar sesión: quien entre después no hereda la búsqueda anterior. */
+export function forgetWardrobeView(): void {
+  view = { search: '', scrollY: 0 };
+  try {
+    sessionStorage.removeItem(KEY);
+  } catch {
+    /* sin almacenamiento: solo memoria */
+  }
+}

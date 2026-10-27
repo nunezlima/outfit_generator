@@ -11,7 +11,8 @@
     "typecheck": "tsc -b",
     "lint": "oxlint src",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:rls": "node scripts/probar-rls.mjs"
   },
   "engines": {
     "node": ">=20"

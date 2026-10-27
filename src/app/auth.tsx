@@ -7,6 +7,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { closeAndDeleteLocalDB, openLocalDB } from '../data/db';
 import { startSync, stopSync } from '../data/sync';
 import { supabase } from '../lib/supabase';
+import { forgetGeneratorFilters } from './generatorState';
+import { forgetWardrobeView } from './wardrobeView';
 
 const LAST_USER = 'guardarropa:last-user';
 
@@ -97,6 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         /* ignorar */
       }
+      forgetGeneratorFilters();
+      forgetWardrobeView();
       await closeAndDeleteLocalDB();
       await supabase?.auth.signOut({ scope: 'local' });
       setState({ status: 'signedOut' });
