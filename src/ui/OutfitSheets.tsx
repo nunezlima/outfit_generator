@@ -93,15 +93,19 @@ export function WearSheet({
   garmentIds,
   outfitId,
   defaultName,
+  perfume,
   onClose,
   onDone,
 }: {
   garmentIds: UUID[];
   outfitId: UUID | null;
   defaultName?: string;
+  /** Perfume sugerido con el outfit: se registra junto con la ropa (puedes quitarlo). */
+  perfume?: { id: UUID; name: string } | null;
   onClose: () => void;
   onDone?: () => void;
 }) {
+  const [withPerfume, setWithPerfume] = useState(!!perfume);
   const [date, setDate] = useState(todayISO());
   const [alsoSave, setAlsoSave] = useState(false);
   const [name, setName] = useState(defaultName ?? '');
@@ -112,7 +116,7 @@ export function WearSheet({
     setBusy(true);
     let oid = outfitId;
     if (!oid && alsoSave && name.trim()) oid = (await createOutfit(name, garmentIds)).id;
-    const moved = await markWorn(garmentIds, date, oid);
+    const moved = await markWorn(garmentIds, date, oid, perfume && withPerfume ? perfume.id : null);
     onClose();
     onDone?.();
     const when = date === todayISO() ? 'hoy' : `el ${formatLongDate(date)}`;
@@ -135,6 +139,14 @@ export function WearSheet({
           <label htmlFor="wear-date">¿Cuándo?</label>
           <input id="wear-date" className="input" type="date" value={date} max={todayISO()} onChange={(e) => setDate(e.target.value || todayISO())} />
         </div>
+        {perfume && (
+          <button type="button" className="list-item" style={{ padding: '8px 0', borderBottom: 0 }} onClick={() => setWithPerfume((v) => !v)}>
+            <CheckBox on={withPerfume} />
+            <span>
+              Registrar también el perfume: <b>{perfume.name}</b>
+            </span>
+          </button>
+        )}
         {!outfitId && (
           <>
             <button type="button" className="list-item" style={{ padding: '8px 0', borderBottom: 0 }} onClick={() => setAlsoSave((v) => !v)}>

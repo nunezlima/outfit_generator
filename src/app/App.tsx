@@ -6,6 +6,7 @@ import { configProblem } from '../lib/supabase';
 import { AnalysisScreen } from '../screens/AnalysisScreen';
 import { CategoriesScreen } from '../screens/CategoriesScreen';
 import { ConfigErrorScreen } from '../screens/ConfigErrorScreen';
+import { EventsScreen } from '../screens/EventsScreen';
 import { GarmentDetailScreen } from '../screens/GarmentDetailScreen';
 import { GarmentFormScreen } from '../screens/GarmentFormScreen';
 import { GenerateScreen } from '../screens/GenerateScreen';
@@ -59,6 +60,7 @@ function Gate() {
             <Route path="ajustes" element={<SettingsScreen />} />
             <Route path="ajustes/categorias" element={<CategoriesScreen />} />
             <Route path="ajustes/reglas" element={<RulesScreen />} />
+            <Route path="ajustes/eventos" element={<EventsScreen />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Route>
         </Routes>

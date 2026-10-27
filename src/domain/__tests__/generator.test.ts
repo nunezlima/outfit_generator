@@ -4,7 +4,7 @@ import { CompatIndex } from '../compat';
 import { generateOutfit, pickForPosition, recencyWeight, weatherAllows, type GenerationResult, type GeneratorContext } from '../generator';
 import { seededRng } from '../random';
 import { EMPTY_FILTERS, type Garment, type GeneratorFilters, type PositionRole } from '../types';
-import { P, garment, id, makeCatalog, makeWardrobe } from './fixtures';
+import { P, garment, id, makeCatalog, makeWardrobe, occasion } from './fixtures';
 
 function ctx(garments: Garment[], filters: Partial<GeneratorFilters> = {}, seed = 1, extra: Partial<GeneratorContext> = {}): GeneratorContext {
   return { garments, catalog: makeCatalog(), filters: { ...EMPTY_FILTERS, ...filters }, rng: seededRng(seed), now: new Date('2026-09-28T12:00:00'), ...extra };
@@ -87,9 +87,9 @@ describe('generador de outfits', () => {
     }
   });
 
-  it('clima calor: nada de frío ni capa exterior', () => {
+  it('clima sol: nada de frío ni capa exterior', () => {
     for (let seed = 1; seed <= 40; seed++) {
-      const r = ok(generateOutfit(ctx(wardrobe, { weather: 'hot' }, seed)));
+      const r = ok(generateOutfit(ctx(wardrobe, { weather: 'sun' }, seed)));
       for (const it of r.items) {
         const g = byId.get(it.garmentId)!;
         expect(g.climate).not.toBe('cold');
@@ -98,11 +98,27 @@ describe('generador de outfits', () => {
     }
   });
 
-  it('clima templado: solo prendas de todo el año', () => {
-    for (let seed = 1; seed <= 40; seed++) {
-      const r = ok(generateOutfit(ctx(wardrobe, { weather: 'mild' }, seed)));
-      for (const it of r.items) expect(byId.get(it.garmentId)!.climate).toBe('all');
+  it('clima lluvia: siempre capa exterior; nada de sol; frío solo en la capa exterior', () => {
+    let coldOuter = 0;
+    for (let seed = 1; seed <= 60; seed++) {
+      const r = ok(generateOutfit(ctx(wardrobe, { weather: 'rain' }, seed)));
+      const gs = r.items.map((i) => byId.get(i.garmentId)!);
+      expect(gs.filter((g) => roleOf(g) === 'outer')).toHaveLength(1);
+      for (const g of gs) {
+        expect(g.climate).not.toBe('hot');
+        if (roleOf(g) !== 'outer') expect(g.climate).toBe('all');
+        else if (g.climate === 'cold') coldOuter++;
+      }
     }
+    // El abrigo (de frío) también sirve para la lluvia.
+    expect(coldOuter).toBeGreaterThan(0);
+  });
+
+  it('clima lluvia sin capa exterior disponible: lo explica', () => {
+    const w = wardrobe.map((g) => (roleOf(g) === 'outer' ? { ...g, status: 'laundry' as const } : g));
+    const r = generateOutfit(ctx(w, { weather: 'rain' }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.message).toContain('capa exterior');
   });
 
   it('clima frío: incluye capa exterior y nada de calor', () => {
@@ -114,18 +130,59 @@ describe('generador de outfits', () => {
     }
   });
 
-  it('weatherAllows: calor/frío + todo el año; templado solo todo el año', () => {
-    expect(weatherAllows('hot', 'hot')).toBe(true);
-    expect(weatherAllows('all', 'hot')).toBe(true);
-    expect(weatherAllows('cold', 'hot')).toBe(false);
-    expect(weatherAllows('all', 'mild')).toBe(true);
-    expect(weatherAllows('hot', 'mild')).toBe(false);
-    expect(weatherAllows('cold', 'mild')).toBe(false);
+  it('weatherAllows: sol/frío + todo el año; lluvia todo el año (+ frío en capa exterior)', () => {
+    expect(weatherAllows('hot', 'sun')).toBe(true);
+    expect(weatherAllows('all', 'sun')).toBe(true);
+    expect(weatherAllows('cold', 'sun')).toBe(false);
+    expect(weatherAllows('all', 'rain')).toBe(true);
+    expect(weatherAllows('hot', 'rain')).toBe(false);
+    expect(weatherAllows('cold', 'rain')).toBe(false);
+    expect(weatherAllows('cold', 'rain', 'outer')).toBe(true);
+    expect(weatherAllows('hot', 'rain', 'outer')).toBe(false);
     expect(weatherAllows('cold', 'cold')).toBe(true);
     expect(weatherAllows('hot', 'cold')).toBe(false);
     expect(weatherAllows('cold', null)).toBe(true);
     // Filas antiguas sin clima = todo el año
-    expect(weatherAllows(undefined, 'mild')).toBe(true);
+    expect(weatherAllows(undefined, 'rain')).toBe(true);
+  });
+
+  it('ocasión: solo prendas con alguno de sus estilos (las sin estilo son comodín)', () => {
+    const catalog = { ...makeCatalog(), occasions: [occasion('Oficina', ['Formal', 'Smart casual'])] };
+    const allowed = new Set([id('style:Formal'), id('style:Smart casual')]);
+    for (let seed = 1; seed <= 40; seed++) {
+      const r = ok(generateOutfit(ctx(wardrobe, { occasionId: id('occ:Oficina') }, seed, { catalog })));
+      for (const it of r.items) {
+        const g = byId.get(it.garmentId)!;
+        if (g.style_ids.length > 0) expect(g.style_ids.some((s) => allowed.has(s))).toBe(true);
+      }
+    }
+  });
+
+  it('ocasión: los estilos que no permite no cuentan para combinar', () => {
+    // La gorra es Casual + Playa; con una ocasión solo Playa, cuenta como Playa.
+    const catalog = { ...makeCatalog(), occasions: [occasion('Playa', ['Playa'])] };
+    for (let seed = 1; seed <= 30; seed++) {
+      const r = ok(generateOutfit(ctx(wardrobe, { occasionId: id('occ:Playa') }, seed, { catalog })));
+      const gs = r.items.map((i) => byId.get(i.garmentId)!);
+      for (const g of gs) if (g.style_ids.length > 0) expect(g.style_ids).toContain(id('style:Playa'));
+    }
+  });
+
+  it('ocasión sin estilos: no restringe; ocasión inexistente: se ignora', () => {
+    const catalog = { ...makeCatalog(), occasions: [occasion('Libre', [])] };
+    ok(generateOutfit(ctx(wardrobe, { occasionId: id('occ:Libre') }, 1, { catalog })));
+    ok(generateOutfit(ctx(wardrobe, { occasionId: id('occ:No existe') }, 1)));
+  });
+
+  it('ocasión imposible: explica que las prendas no son de sus estilos', () => {
+    const w = wardrobe.filter((g) => !g.style_ids.includes(id('style:Formal')) || roleOf(g) !== 'footwear');
+    const catalog = { ...makeCatalog(), occasions: [occasion('Gala', ['Formal'])] };
+    const r = generateOutfit(ctx(w, { occasionId: id('occ:Gala') }, 1, { catalog }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.message).toContain('Gala');
+      expect(r.details.join(' ')).toContain('no son de los estilos de “Gala”');
+    }
   });
 
   it('los estilos deseleccionados quitan prendas que solo tenían esos estilos', () => {

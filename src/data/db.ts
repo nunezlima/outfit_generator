@@ -13,7 +13,10 @@ import type {
   GarmentEvent,
   GarmentRule,
   GarmentType,
+  Occasion,
   Outfit,
+  OutfitEvent,
+  Perfume,
   Position,
   Preset,
   Style,
@@ -33,6 +36,9 @@ export const SYNC_TABLES = [
   'type_rules',
   'garment_rules',
   'presets',
+  'outfit_events',
+  'occasions',
+  'perfumes',
   'outfits',
   'wear_log',
   'garment_events',
@@ -50,6 +56,9 @@ export interface RowByTable {
   type_rules: TypeRule;
   garment_rules: GarmentRule;
   presets: Preset;
+  outfit_events: OutfitEvent;
+  occasions: Occasion;
+  perfumes: Perfume;
   outfits: Outfit;
   wear_log: WearLogEntry;
   garment_events: GarmentEvent;
@@ -66,6 +75,9 @@ export const LOCAL_KEY: Record<TableName, string[]> = {
   type_rules: ['type_a', 'type_b'],
   garment_rules: ['garment_a', 'garment_b'],
   presets: ['id'],
+  outfit_events: ['id'],
+  occasions: ['id'],
+  perfumes: ['id'],
   outfits: ['id'],
   wear_log: ['id'],
   garment_events: ['id'],
@@ -82,6 +94,9 @@ export const REMOTE_CONFLICT: Record<TableName, string> = {
   type_rules: 'user_id,type_a,type_b',
   garment_rules: 'user_id,garment_a,garment_b',
   presets: 'id',
+  outfit_events: 'id',
+  occasions: 'id',
+  perfumes: 'id',
   outfits: 'id',
   wear_log: 'id',
   garment_events: 'id',
@@ -129,6 +144,9 @@ export class LocalDB extends Dexie {
   type_rules!: Table<TypeRule, [string, string]>;
   garment_rules!: Table<GarmentRule, [string, string]>;
   presets!: Table<Preset, string>;
+  outfit_events!: Table<OutfitEvent, string>;
+  occasions!: Table<Occasion, string>;
+  perfumes!: Table<Perfume, string>;
   outfits!: Table<Outfit, string>;
   wear_log!: Table<WearLogEntry, string>;
   garment_events!: Table<GarmentEvent, string>;
@@ -157,6 +175,12 @@ export class LocalDB extends Dexie {
       failed: '++seq',
       photos: 'path, pending',
       meta: 'key',
+    });
+    // v2: eventos, ocasiones y perfumes.
+    this.version(2).stores({
+      outfit_events: 'id',
+      occasions: 'id, event_id',
+      perfumes: 'id',
     });
   }
 }

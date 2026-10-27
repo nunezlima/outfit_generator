@@ -229,7 +229,7 @@ function GarmentForm({ existing }: { existing: Garment | null }) {
             onChange={(v) => set('climate', v)}
             options={(Object.keys(CLIMATE_LABELS) as Climate[]).map((c) => ({ value: c, label: CLIMATE_LABELS[c] }))}
           />
-          <span className="hint">“Todo el año” sale con cualquier clima; “Calor” y “Frío” solo en esos días.</span>
+          <span className="hint">“Todo el año” sale con cualquier clima; “Sol” y “Frío” solo en esos días. Con lluvia salen las de todo el año (y en capa exterior, también las de frío).</span>
         </div>
 
         <div className="spread">

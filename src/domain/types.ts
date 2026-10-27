@@ -10,9 +10,17 @@ export type PositionRole = 'top' | 'mid' | 'bottom' | 'full_body' | 'outer' | 'f
 
 export type Warmth = 'light' | 'medium' | 'warm';
 export type GarmentStatus = 'available' | 'laundry' | 'archived';
-export type Weather = 'hot' | 'mild' | 'cold';
-/** Clima en el que se usa una prenda: 'all' = todo el año. */
+/** Clima del día para la ropa: sol, lluvia o frío. */
+export type Weather = 'sun' | 'rain' | 'cold';
+/**
+ * Clima en el que se usa una prenda: 'hot' = de sol (antes "calor"),
+ * 'all' = todo el año, 'cold' = de frío. El valor 'hot' se conserva en la
+ * base de datos para no migrar filas; en la interfaz se llama "Sol".
+ */
 export type Climate = 'hot' | 'all' | 'cold';
+/** Clima del perfume: independiente del clima de la ropa. */
+export type PerfumeClimate = 'hot' | 'mild' | 'cold';
+export type PerfumeStatus = 'available' | 'archived';
 export type EventKind = 'shown' | 'reject_strong' | 'reject_weak';
 
 /** Columnas comunes a todas las tablas sincronizadas. */
@@ -93,8 +101,11 @@ export interface GeneratorFilters {
   excludedStyleIds: UUID[];
   targetStyleId: UUID | null;
   weather: Weather | null;
+  /** Ocasión elegida (define estilos permitidos y perfumes). null = "Todo". */
+  occasionId: UUID | null;
 }
 
+/** Ya no se muestran en la app (los reemplazaron los eventos); se conservan los datos. */
 export interface Preset extends SyncedRow {
   id: UUID;
   name: string;
@@ -117,6 +128,38 @@ export interface WearLogEntry extends SyncedRow {
   worn_on: ISODate;
   garment_ids: UUID[];
   outfit_id: UUID | null;
+  /** Perfume que usaste ese día (filas viejas no lo tienen). */
+  perfume_id?: UUID | null;
+}
+
+/** Evento del generador (Ejercicio, Pulcro, Íntimo…): agrupa ocasiones. */
+export interface OutfitEvent extends SyncedRow {
+  id: UUID;
+  name: string;
+  sort_order: number;
+}
+
+/**
+ * Ocasión dentro de un evento. Decide qué estilos de ropa se permiten y qué
+ * perfumes se sugieren en cada clima (el primero de cada lista es el
+ * principal; los demás, secundarios).
+ */
+export interface Occasion extends SyncedRow {
+  id: UUID;
+  event_id: UUID;
+  name: string;
+  style_ids: UUID[];
+  perfumes_hot: UUID[];
+  perfumes_mild: UUID[];
+  perfumes_cold: UUID[];
+  sort_order: number;
+}
+
+export interface Perfume extends SyncedRow {
+  id: UUID;
+  name: string;
+  notes: string | null;
+  status: PerfumeStatus;
 }
 
 export interface GarmentEvent extends SyncedRow {
@@ -156,6 +199,7 @@ export const EMPTY_FILTERS: GeneratorFilters = {
   excludedStyleIds: [],
   targetStyleId: null,
   weather: null,
+  occasionId: null,
 };
 
 /** Todo el catálogo + reglas, ya sin filas borradas. */
@@ -166,6 +210,9 @@ export interface Catalog {
   styleCompat: StyleCompat[];
   typeRules: TypeRule[];
   garmentRules: GarmentRule[];
+  /** Eventos y ocasiones del generador (ordenados). */
+  events: OutfitEvent[];
+  occasions: Occasion[];
 }
 
 export const ROLE_LABELS: Record<PositionRole, string> = {
@@ -186,8 +233,14 @@ export const WARMTH_LABELS: Record<Warmth, string> = {
 };
 
 export const CLIMATE_LABELS: Record<Climate, string> = {
-  hot: 'Calor',
+  hot: 'Sol',
   all: 'Todo el año',
+  cold: 'Frío',
+};
+
+export const PERFUME_CLIMATE_LABELS: Record<PerfumeClimate, string> = {
+  hot: 'Calor',
+  mild: 'Templado',
   cold: 'Frío',
 };
 
@@ -198,7 +251,7 @@ export const STATUS_LABELS: Record<GarmentStatus, string> = {
 };
 
 export const WEATHER_LABELS: Record<Weather, string> = {
-  hot: 'Calor',
-  mild: 'Templado',
+  sun: 'Sol',
+  rain: 'Lluvia',
   cold: 'Frío',
 };

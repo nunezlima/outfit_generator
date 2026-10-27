@@ -1,6 +1,6 @@
 // Datos de prueba ficticios y constructores cómodos para las pruebas.
 
-import type { Catalog, Garment, GarmentType, Position, PositionRole, Style, UUID, Warmth } from '../types';
+import type { Catalog, Garment, GarmentType, Occasion, Perfume, Position, PositionRole, Style, UUID, Warmth } from '../types';
 
 const ids = new Map<string, UUID>();
 let counter = 0;
@@ -93,7 +93,28 @@ export function makeCatalog(): Catalog {
     ],
     typeRules: [tr('Pantalón de vestir', 'Chanclas', false), tr('Pantalón de vestir', 'Hoodie', false)],
     garmentRules: [],
+    events: [],
+    occasions: [],
   };
+}
+
+/** Ocasión de prueba con estilos (por nombre) y perfumes (por id) por clima. */
+export function occasion(name: string, styles: string[], perfumes: Partial<Record<'hot' | 'mild' | 'cold', string[]>> = {}, eventName = 'Evento'): Occasion {
+  return {
+    ...base,
+    id: id(`occ:${name}`),
+    event_id: id(`event:${eventName}`),
+    name,
+    style_ids: styles.map((s) => id(`style:${s}`)),
+    perfumes_hot: (perfumes.hot ?? []).map((n) => id(`perfume:${n}`)),
+    perfumes_mild: (perfumes.mild ?? []).map((n) => id(`perfume:${n}`)),
+    perfumes_cold: (perfumes.cold ?? []).map((n) => id(`perfume:${n}`)),
+    sort_order: 0,
+  };
+}
+
+export function perfume(name: string, extra: Partial<Perfume> = {}): Perfume {
+  return { ...base, id: id(`perfume:${name}`), name, notes: null, status: 'available', ...extra };
 }
 
 export function garment(name: string, typeName: string, styles: string[], extra: Partial<Garment> = {}): Garment {

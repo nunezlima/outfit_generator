@@ -22,11 +22,11 @@ import { CompatIndex, type PairVerdict } from './compat';
 import { daysBetween } from './dates';
 import { defaultRng, weightedPick, weightedShuffle, type Rng } from './random';
 import {
-  WEATHER_LABELS,
   type Catalog,
   type Climate,
   type Garment,
   type GeneratorFilters,
+  type Occasion,
   type Position,
   type PositionRole,
   type UUID,
@@ -42,6 +42,7 @@ export type ExclusionReason =
   | 'excluded_type'
   | 'excluded_style'
   | 'target_style'
+  | 'occasion'
   | 'weather';
 
 export interface GeneratorContext {
@@ -97,18 +98,19 @@ const MID_ALONE_CHANCE = 0.35;
 
 /**
  * ¿Esta prenda sirve para el clima del día?
- *   calor    → prendas de calor y de todo el año
- *   templado → solo prendas de todo el año
- *   frío     → prendas de frío y de todo el año
+ *   sol    → prendas de sol y de todo el año
+ *   lluvia → prendas de todo el año; en la capa exterior también las de frío
+ *            (chamarras y abrigos sirven para la lluvia)
+ *   frío   → prendas de frío y de todo el año
  * Filas antiguas sin clima cuentan como "todo el año".
  */
-export function weatherAllows(climate: Climate | null | undefined, weather: Weather | null): boolean {
+export function weatherAllows(climate: Climate | null | undefined, weather: Weather | null, role?: PositionRole): boolean {
   const c = climate ?? 'all';
   switch (weather) {
-    case 'hot':
+    case 'sun':
       return c !== 'cold';
-    case 'mild':
-      return c === 'all';
+    case 'rain':
+      return c === 'all' || (role === 'outer' && c === 'cold');
     case 'cold':
       return c !== 'hot';
     default:
@@ -116,22 +118,41 @@ export function weatherAllows(climate: Climate | null | undefined, weather: Weat
   }
 }
 
-/** Probabilidad de incluir una posición opcional de una sola prenda. */
+/**
+ * Probabilidad de incluir una posición opcional de una sola prenda.
+ * Con lluvia la capa exterior no es opcional: es obligatoria (ver buildSlots).
+ */
 function optionalChance(role: PositionRole, weather: Weather | null): number {
   if (role === 'outer') {
     if (weather === 'cold') return 1;
-    if (weather === 'mild') return 0.5;
-    if (weather === 'hot') return 0;
+    if (weather === 'sun') return 0;
     return 0.35;
   }
   if (role === 'mid') {
     if (weather === 'cold') return 0.85;
-    if (weather === 'mild') return 0.4;
-    if (weather === 'hot') return 0;
+    if (weather === 'rain') return 0.4;
+    if (weather === 'sun') return 0;
     return 0.35;
   }
   if (role === 'extra') return 0.35;
   return 0;
+}
+
+/** Ocasión activa de los filtros (si existe y no está borrada). */
+export function activeOccasion(catalog: Catalog, filters: Pick<GeneratorFilters, 'occasionId'>): Occasion | null {
+  if (!filters.occasionId) return null;
+  return catalog.occasions.find((o) => o.id === filters.occasionId && !o.deleted_at) ?? null;
+}
+
+/**
+ * Estilos que la ocasión deja fuera (todos los que no permite). Una ocasión
+ * sin estilos no restringe nada.
+ */
+function stylesOutsideOccasion(catalog: Catalog, occasion: Occasion | null): UUID[] {
+  if (!occasion) return [];
+  const allowed = new Set(occasion.style_ids.filter((id) => catalog.styles.some((s) => s.id === id)));
+  if (allowed.size === 0) return [];
+  return catalog.styles.filter((s) => !allowed.has(s.id)).map((s) => s.id);
 }
 
 /** Cuántos accesorios: 30 % ninguno, el resto repartido entre 1 y max. */
@@ -162,6 +183,8 @@ interface Prepared {
   rng: Rng;
   now: Date;
   compat: CompatIndex;
+  /** Ocasión elegida (o null = todas). */
+  occasion: Occasion | null;
   positions: Position[];
   positionById: Map<UUID, Position>;
   positionOfGarment: Map<UUID, Position>;
@@ -174,20 +197,28 @@ interface Prepared {
   total: Map<UUID, number>;
 }
 
-function exclusionReason(g: Garment, filters: GeneratorFilters, compat: CompatIndex): ExclusionReason | null {
+function exclusionReason(g: Garment, role: PositionRole, filters: GeneratorFilters, compat: CompatIndex, userExcluded: Set<UUID>): ExclusionReason | null {
   if (g.status === 'archived') return 'archived';
   if (g.status === 'laundry') return 'laundry';
   if (filters.excludedGarmentIds.includes(g.id)) return 'excluded_garment';
   if (filters.excludedTypeIds.includes(g.type_id)) return 'excluded_type';
+  const known = compat.knownStyles(g);
+  // Estilos que quedan tras lo que deseleccionaste tú, y tras la ocasión.
+  const userEffective = known.filter((id) => !userExcluded.has(id));
   const effective = compat.effectiveStyles(g);
-  if (compat.knownStyles(g).length > 0 && effective.length === 0) return 'excluded_style';
+  if (known.length > 0 && userEffective.length === 0) return 'excluded_style';
+  if (known.length > 0 && effective.length === 0) return 'occasion';
   if (filters.targetStyleId && effective.length > 0 && !effective.includes(filters.targetStyleId)) return 'target_style';
-  if (!weatherAllows(g.climate, filters.weather)) return 'weather';
+  if (!weatherAllows(g.climate, filters.weather, role)) return 'weather';
   return null;
 }
 
 function prepare(ctx: GeneratorContext): Prepared {
-  const compat = new CompatIndex(ctx.catalog, { excludedStyleIds: ctx.filters.excludedStyleIds });
+  const occasion = activeOccasion(ctx.catalog, ctx.filters);
+  const userExcluded = new Set(ctx.filters.excludedStyleIds);
+  // Los estilos que la ocasión no permite cuentan como deseleccionados: así
+  // tampoco cuentan al decidir si dos prendas combinan.
+  const compat = new CompatIndex(ctx.catalog, { excludedStyleIds: [...userExcluded, ...stylesOutsideOccasion(ctx.catalog, occasion)] });
   const positions = [...ctx.catalog.positions].sort((a, b) => a.sort_order - b.sort_order);
   const positionById = new Map(positions.map((p) => [p.id, p]));
   const typePosition = new Map<UUID, Position>();
@@ -208,7 +239,7 @@ function prepare(ctx: GeneratorContext): Prepared {
     if (!pos) continue;
     positionOfGarment.set(g.id, pos);
     total.set(pos.id, (total.get(pos.id) ?? 0) + 1);
-    const reason = exclusionReason(g, ctx.filters, compat);
+    const reason = exclusionReason(g, pos.role, ctx.filters, compat, userExcluded);
     if (reason) {
       const counts = excluded.get(pos.id)!;
       counts[reason] = (counts[reason] ?? 0) + 1;
@@ -222,6 +253,7 @@ function prepare(ctx: GeneratorContext): Prepared {
     rng: ctx.rng ?? defaultRng,
     now: ctx.now ?? new Date(),
     compat,
+    occasion,
     positions,
     positionById,
     positionOfGarment,
@@ -420,6 +452,13 @@ function buildSlots(
   }
   required.push(...positionsWithRole(prep, 'footwear'));
 
+  // Con lluvia, la capa exterior es obligatoria (cuál, lo decides tú: sirve
+  // cualquiera disponible). Si tienes varias posiciones de capa exterior, se
+  // exige una: la fijada, o la primera con prendas.
+  const outers = positionsWithRole(prep, 'outer');
+  const rainOuter = weather === 'rain' && outers.length > 0 ? (outers.find((p) => pinsByPosition.has(p.id)) ?? outers.find(has) ?? outers[0]) : undefined;
+  if (rainOuter) required.push(rainOuter);
+
   const empty = required.filter((p) => !has(p));
   if (empty.length > 0) return emptyPositionsFailure(prep, empty);
 
@@ -428,6 +467,7 @@ function buildSlots(
 
   // Opcionales: si hay algo fijado ahí, entran sí o sí.
   for (const p of prep.positions) {
+    if (p === rainOuter) continue;
     const pinnedHere = pinsByPosition.get(p.id)?.length ?? 0;
     if (p.role === 'outer' || p.role === 'extra') {
       if (pinnedHere > 0 || rng() < optionalChance(p.role, weather)) slots.push({ position: p, required: false });
@@ -567,8 +607,17 @@ const REASON_TEXT: Record<ExclusionReason, (n: number, prep: Prepared) => string
   excluded_type: (n) => `${n} de tipos deseleccionados`,
   excluded_style: (n) => `${n} solo con estilos deseleccionados`,
   target_style: (n, prep) => `${n} no ${n === 1 ? 'es' : 'son'} de estilo ${prep.compat.styleName(prep.ctx.filters.targetStyleId ?? '')}`,
-  weather: (n, prep) => `${n} no ${n === 1 ? 'sirve' : 'sirven'} para clima ${WEATHER_LABELS[prep.ctx.filters.weather ?? 'mild'].toLowerCase()}`,
+  occasion: (n, prep) => `${n} no ${n === 1 ? 'es' : 'son'} de los estilos de “${prep.occasion?.name ?? ''}”`,
+  weather: (n, prep) => `${n} no ${n === 1 ? 'sirve' : 'sirven'} para ${weatherPhrase(prep.ctx.filters.weather)}`,
 };
+
+/** "día de sol", "lluvia", "frío". */
+function weatherPhrase(w: Weather | null): string {
+  if (w === 'sun') return 'día de sol';
+  if (w === 'rain') return 'lluvia';
+  if (w === 'cold') return 'frío';
+  return 'este clima';
+}
 
 const REASON_HINT: Record<ExclusionReason, (prep: Prepared) => string> = {
   laundry: () => 'Marca como lavadas algunas prendas del Cesto.',
@@ -577,6 +626,7 @@ const REASON_HINT: Record<ExclusionReason, (prep: Prepared) => string> = {
   excluded_type: () => 'Vuelve a incluir tipos en "Prendas participantes".',
   excluded_style: () => 'Vuelve a incluir estilos en "Prendas participantes".',
   target_style: (prep) => `Quita el estilo objetivo o agrega el estilo ${prep.compat.styleName(prep.ctx.filters.targetStyleId ?? '')} a más prendas.`,
+  occasion: () => 'Elige otro evento, agrega uno de sus estilos a más prendas, o cambia los estilos del evento en Ajustes → Eventos y perfumes.',
   weather: () => 'Cambia el clima del generador o ajusta el clima de tus prendas.',
 };
 
@@ -608,8 +658,9 @@ function emptyPositionsFailure(prep: Prepared, empty: Position[]): GenerationFai
   const first = empty[0];
   let suffix = '';
   const counts = prep.excluded.get(first.id) ?? {};
+  if (prep.occasion && counts.occasion) suffix += ` para “${prep.occasion.name}”`;
   if (f.targetStyleId && counts.target_style) suffix += ` con estilo ${prep.compat.styleName(f.targetStyleId)}`;
-  if (f.weather && counts.weather) suffix += ` para clima ${WEATHER_LABELS[f.weather].toLowerCase()}`;
+  if (f.weather && counts.weather) suffix += ` para ${weatherPhrase(f.weather)}`;
   const onlyLaundry = Object.keys(counts).length > 0 && Object.keys(counts).every((k) => k === 'laundry');
   const noun = empty.map((p) => p.name.toLowerCase()).join(' ni ');
   let message: string;

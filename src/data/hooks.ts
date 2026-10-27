@@ -10,6 +10,7 @@ import {
   type Garment,
   type GarmentEvent,
   type Outfit,
+  type Perfume,
   type Preset,
   type UserPrefs,
   type UUID,
@@ -22,13 +23,15 @@ const bySort = <T extends { sort_order: number; name: string }>(a: T, b: T) => a
 export function useCatalog(): Catalog | undefined {
   return useLiveQuery(async () => {
     const db = getDB();
-    const [positions, types, styles, styleCompat, typeRules, garmentRules] = await Promise.all([
+    const [positions, types, styles, styleCompat, typeRules, garmentRules, events, occasions] = await Promise.all([
       db.positions.toArray(),
       db.garment_types.toArray(),
       db.styles.toArray(),
       db.style_compat.toArray(),
       db.type_rules.toArray(),
       db.garment_rules.toArray(),
+      db.outfit_events.toArray(),
+      db.occasions.toArray(),
     ]);
     return {
       positions: positions.sort(bySort),
@@ -37,6 +40,8 @@ export function useCatalog(): Catalog | undefined {
       styleCompat,
       typeRules,
       garmentRules,
+      events: events.sort(bySort),
+      occasions: occasions.sort(bySort),
     };
   }, []);
 }
@@ -71,6 +76,11 @@ export function useEvents(): GarmentEvent[] | undefined {
 
 export function usePresets(): Preset[] | undefined {
   return useLiveQuery(async () => (await getDB().presets.toArray()).sort(bySort), []);
+}
+
+/** Perfumes ordenados por nombre (incluye archivados). */
+export function usePerfumes(): Perfume[] | undefined {
+  return useLiveQuery(async () => (await getDB().perfumes.toArray()).sort((a, b) => a.name.localeCompare(b.name, 'es')), []);
 }
 
 export function usePrefs(): UserPrefs {

@@ -1,9 +1,7 @@
-// Ajustes: cuenta y sincronización, tema, categorías, reglas, presets,
+// Ajustes: cuenta y sincronización, tema, categorías, eventos, reglas,
 // parámetros del análisis, respaldo, datos de ejemplo y caché.
 
 import {
-  ArrowDown,
-  ArrowUp,
   ChevronRight,
   Download,
   HardDrive,
@@ -11,7 +9,6 @@ import {
   LogOut,
   Monitor,
   Moon,
-  Pencil,
   RefreshCw,
   Shapes,
   Sparkles,
@@ -24,14 +21,14 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth, useSession } from '../app/auth';
 import { useTheme, type ThemeChoice } from '../app/theme';
-import { useFailedOps, useGarments, useOutboxCounts, usePrefs, usePresets } from '../data/hooks';
+import { useFailedOps, useGarments, useOutboxCounts, usePrefs } from '../data/hooks';
 import { clearPhotoCache } from '../data/photos';
-import { discardFailed, reorder, retryFailed, savePreset, softDelete, updatePrefs } from '../data/repo';
+import { discardFailed, retryFailed, updatePrefs } from '../data/repo';
 import { loadSampleData, removeSampleData } from '../data/sample';
 import { syncNow, useSyncStatus } from '../data/sync';
-import { EMPTY_FILTERS, type Preset } from '../domain/types';
 import { CheckBox, NumberStepper, Page, Segmented } from '../ui/common';
 import { useFeedback } from '../ui/feedback';
+import { PerfumeIcon } from '../ui/icons';
 import { Sheet } from '../ui/Sheet';
 
 export function SettingsScreen() {
@@ -53,6 +50,16 @@ export function SettingsScreen() {
               </span>
               <ChevronRight width={18} />
             </Link>
+            <Link to="/ajustes/eventos" className="list-item">
+              <PerfumeIcon width={20} />
+              <span className="grow">
+                Eventos y perfumes
+                <span className="small muted" style={{ display: 'block' }}>
+                  Estilos y perfumes de cada ocasión
+                </span>
+              </span>
+              <ChevronRight width={18} />
+            </Link>
             <Link to="/ajustes/reglas" className="list-item">
               <Link2 width={20} />
               <span className="grow">
@@ -65,7 +72,6 @@ export function SettingsScreen() {
             </Link>
           </div>
         </section>
-        <PresetsSection />
         <AnalysisPrefsSection />
         <BackupSection />
         <SampleSection />
@@ -176,80 +182,6 @@ function AppearanceSection() {
         ]}
       />
     </section>
-  );
-}
-
-function PresetsSection() {
-  const presets = usePresets() ?? [];
-  const { confirm, toast } = useFeedback();
-  const [renaming, setRenaming] = useState<Preset | null>(null);
-  const move = (i: number, d: -1 | 1) => {
-    const list = [...presets];
-    const [p] = list.splice(i, 1);
-    list.splice(i + d, 0, p);
-    void reorder('presets', list);
-  };
-  return (
-    <section className="stack" style={{ gap: 8 }}>
-      <h2>Presets del generador</h2>
-      {presets.length === 0 ? (
-        <p className="hint">Crea presets desde Generar con “Guardar preset”.</p>
-      ) : (
-        <div className="card-list">
-          {presets.map((p, i) => (
-            <div key={p.id} className="list-item">
-              <span className="grow ellipsis">{p.name}</span>
-              <button className="icon-btn sm" aria-label="Subir" disabled={i === 0} onClick={() => move(i, -1)}>
-                <ArrowUp />
-              </button>
-              <button className="icon-btn sm" aria-label="Bajar" disabled={i === presets.length - 1} onClick={() => move(i, 1)}>
-                <ArrowDown />
-              </button>
-              <button className="icon-btn sm" aria-label={`Renombrar ${p.name}`} onClick={() => setRenaming(p)}>
-                <Pencil />
-              </button>
-              <button
-                className="icon-btn sm"
-                aria-label={`Eliminar ${p.name}`}
-                onClick={async () => {
-                  if (await confirm({ title: `¿Eliminar el preset “${p.name}”?`, confirmText: 'Eliminar', danger: true })) {
-                    await softDelete('presets', [p]);
-                    toast('Preset eliminado');
-                  }
-                }}
-              >
-                <Trash2 />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      {renaming && <RenameSheet preset={renaming} onClose={() => setRenaming(null)} />}
-    </section>
-  );
-}
-
-function RenameSheet({ preset, onClose }: { preset: Preset; onClose: () => void }) {
-  const [name, setName] = useState(preset.name);
-  return (
-    <Sheet
-      title="Renombrar preset"
-      onClose={onClose}
-      footer={
-        <button
-          className="btn primary"
-          disabled={!name.trim()}
-          onClick={async () => {
-            await savePreset(name, { ...EMPTY_FILTERS, ...preset.config }, preset);
-            onClose();
-          }}
-        >
-          Guardar
-        </button>
-      }
-    >
-      <input className="input" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} aria-label="Nombre del preset" autoFocus />
-    </Sheet>
   );
 }
 

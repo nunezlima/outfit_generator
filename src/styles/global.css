@@ -1169,6 +1169,26 @@ a.list-item:active {
   height: 38px;
 }
 
+.outfit-item.perfume-item {
+  align-items: flex-start;
+}
+
+.perfume-climate {
+  margin-top: 6px;
+  max-width: 280px;
+}
+
+.perfume-climate .segmented {
+  padding: 2px;
+  border-radius: 10px;
+}
+
+.perfume-climate .segmented button {
+  min-height: 30px;
+  font-size: 0.8rem;
+  border-radius: 8px;
+}
+
 .outfit-add {
   display: flex;
   flex-wrap: wrap;

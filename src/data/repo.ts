@@ -9,6 +9,7 @@
 import { orderedPair } from '../domain/compat';
 import { todayISO } from '../domain/dates';
 import { applyWash, applyWear } from '../domain/laundry';
+import { withoutPerfume } from '../domain/perfumes';
 import type {
   EventKind,
   Garment,
@@ -16,7 +17,10 @@ import type {
   GarmentStatus,
   GarmentType,
   GeneratorFilters,
+  Occasion,
   Outfit,
+  OutfitEvent,
+  Perfume,
   Position,
   Preset,
   Style,
@@ -136,11 +140,15 @@ export async function deleteGarments(garments: Garment[]): Promise<void> {
  * "Lo usé": registra el día en el historial, suma un uso a cada prenda y
  * manda al cesto las que llegan a su límite. Devuelve las que pasaron al cesto.
  */
-export async function markWorn(garmentIds: UUID[], wornOn: string = todayISO(), outfitId: UUID | null = null): Promise<Garment[]> {
+export async function markWorn(garmentIds: UUID[], wornOn: string = todayISO(), outfitId: UUID | null = null, perfumeId: UUID | null = null): Promise<Garment[]> {
   const db = getDB();
   const garments = (await db.garments.bulkGet(garmentIds)).filter((g): g is Garment => !!g);
   const outcomes = garments.map(applyWear);
-  await saveRows('wear_log', [{ ...baseRow(), id: newId(), worn_on: wornOn, garment_ids: garments.map((g) => g.id), outfit_id: outfitId }]);
+  // El perfume solo se guarda si sigue existiendo (si no, la base lo rechazaría).
+  const perfume = perfumeId ? await db.perfumes.get(perfumeId) : undefined;
+  await saveRows('wear_log', [
+    { ...baseRow(), id: newId(), worn_on: wornOn, garment_ids: garments.map((g) => g.id), outfit_id: outfitId, perfume_id: perfume ? perfume.id : null },
+  ]);
   await saveRows('garments', outcomes.map((o) => o.garment));
   return outcomes.filter((o) => o.movedToLaundry).map((o) => o.garment);
 }
@@ -250,7 +258,9 @@ export async function setGarmentRules(pairs: { a: UUID; b: UUID; allowed: boolea
 
 // ─── Categorías: posiciones, tipos y estilos ───────────────────────────────
 
-async function nextSortOrder(table: 'positions' | 'garment_types' | 'styles' | 'presets'): Promise<number> {
+type SortedTable = 'positions' | 'garment_types' | 'styles' | 'presets' | 'outfit_events' | 'occasions';
+
+async function nextSortOrder(table: SortedTable): Promise<number> {
   const rows = (await getDB().table(table).toArray()) as { sort_order: number }[];
   return rows.reduce((m, r) => Math.max(m, r.sort_order), 0) + 10;
 }
@@ -274,7 +284,7 @@ export async function createStyle(name: string): Promise<Style> {
 }
 
 /** Reordenar: reescribe sort_order según el orden recibido. */
-export async function reorder<T extends 'positions' | 'garment_types' | 'styles' | 'presets'>(table: T, rows: RowByTable[T][]): Promise<void> {
+export async function reorder<T extends SortedTable>(table: T, rows: RowByTable[T][]): Promise<void> {
   const changed = rows.map((r, i) => ({ ...r, sort_order: (i + 1) * 10 })).filter((r, i) => r.sort_order !== rows[i].sort_order);
   await saveRows(table, changed as RowByTable[T][]);
 }
@@ -317,6 +327,15 @@ export async function deleteStyle(s: Style, replaceWith: UUID | null): Promise<v
   );
   const compat = await db.style_compat.filter((r) => r.style_a === s.id || r.style_b === s.id).toArray();
   await softDelete('style_compat', compat);
+  // Las ocasiones que lo permitían pasan a permitir el reemplazo (o lo pierden).
+  const occasions = (await db.occasions.toArray()).filter((o) => o.style_ids.includes(s.id));
+  await saveRows(
+    'occasions',
+    occasions.map((o) => {
+      const rest = o.style_ids.filter((id) => id !== s.id);
+      return { ...o, style_ids: replaceWith && !rest.includes(replaceWith) ? [...rest, replaceWith] : rest };
+    }),
+  );
   await cleanPresets((f) => ({
     ...f,
     excludedStyleIds: (f.excludedStyleIds ?? []).filter((id) => id !== s.id),
@@ -342,6 +361,74 @@ export async function savePreset(name: string, config: GeneratorFilters, existin
     : { ...baseRow(), id: newId(), name: name.trim(), config, sort_order: await nextSortOrder('presets') };
   await saveRows('presets', [row]);
   return row;
+}
+
+// ─── Eventos, ocasiones y perfumes ─────────────────────────────────────────
+
+/** Crea un evento con una primera ocasión del mismo nombre (luego se edita). */
+export async function createEvent(name: string): Promise<{ event: OutfitEvent; occasion: Occasion }> {
+  const event: OutfitEvent = { ...baseRow(), id: newId(), name: name.trim(), sort_order: await nextSortOrder('outfit_events') };
+  await saveRows('outfit_events', [event]);
+  const occasion = await createOccasion(event.id, name);
+  return { event, occasion };
+}
+
+export async function renameEvent(e: OutfitEvent, name: string): Promise<void> {
+  await saveRows('outfit_events', [{ ...e, name: name.trim() }]);
+}
+
+/** Borra un evento y sus ocasiones. */
+export async function deleteEvent(e: OutfitEvent): Promise<void> {
+  const occasions = await getDB().occasions.where('event_id').equals(e.id).toArray();
+  await softDelete('occasions', occasions);
+  await softDelete('outfit_events', [e]);
+}
+
+export async function createOccasion(eventId: UUID, name: string): Promise<Occasion> {
+  const row: Occasion = {
+    ...baseRow(),
+    id: newId(),
+    event_id: eventId,
+    name: name.trim(),
+    style_ids: [],
+    perfumes_hot: [],
+    perfumes_mild: [],
+    perfumes_cold: [],
+    sort_order: await nextSortOrder('occasions'),
+  };
+  await saveRows('occasions', [row]);
+  return row;
+}
+
+export async function saveOccasion(o: Occasion): Promise<void> {
+  await saveRows('occasions', [{ ...o, name: o.name.trim() }]);
+}
+
+export async function deleteOccasion(o: Occasion): Promise<void> {
+  await softDelete('occasions', [o]);
+}
+
+export type PerfumeDraft = Pick<Perfume, 'name' | 'notes' | 'status'>;
+
+export async function createPerfume(draft: PerfumeDraft): Promise<Perfume> {
+  const row: Perfume = { ...baseRow(), id: newId(), name: draft.name.trim(), notes: draft.notes?.trim() || null, status: draft.status };
+  await saveRows('perfumes', [row]);
+  return row;
+}
+
+export async function updatePerfume(p: Perfume, patch: Partial<PerfumeDraft>): Promise<void> {
+  const next: Perfume = { ...p, ...patch };
+  if (patch.name !== undefined) next.name = patch.name.trim();
+  if (patch.notes !== undefined) next.notes = patch.notes?.trim() || null;
+  await saveRows('perfumes', [next]);
+}
+
+/** Borra un perfume y lo quita de todas las ocasiones. El historial lo conserva sin nombre. */
+export async function deletePerfume(p: Perfume): Promise<void> {
+  const db = getDB();
+  const occasions = (await db.occasions.toArray()).filter((o) => o.perfumes_hot.includes(p.id) || o.perfumes_mild.includes(p.id) || o.perfumes_cold.includes(p.id));
+  await saveRows('occasions', occasions.map((o) => withoutPerfume(o, p.id)));
+  await softDelete('perfumes', [p]);
 }
 
 // ─── Ajustes ───────────────────────────────────────────────────────────────
