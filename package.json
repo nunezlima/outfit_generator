@@ -18,13 +18,13 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.117.2",
-    "dexie": "^4.4.6",
+    "@supabase/supabase-js": "^2.118.0",
+    "dexie": "^4.4.7",
     "dexie-react-hooks": "^4.4.0",
     "jszip": "^3.10.2",
-    "lucide-react": "^1.48.0",
-    "react": "^19.3.0",
-    "react-dom": "^19.3.0",
+    "lucide-react": "^1.60.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
