@@ -1,0 +1,27 @@
+# Dependabot abre pull requests para mantener al día las dependencias de npm y
+# las actions de los workflows (fijadas por SHA). Cada PR pasa por la CI.
+# cooldown: espera 7 días antes de proponer una versión recién publicada, por si
+# resulta comprometida y la retiran (las alertas de seguridad no esperan).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      desarrollo:
+        dependency-type: development
+        update-types: [minor, patch]
+      produccion:
+        dependency-type: production
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

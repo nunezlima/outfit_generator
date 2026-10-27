@@ -4,6 +4,14 @@
 #   SUPABASE_DB_PASSWORD   contraseña de la base de datos del proyecto
 #   SUPABASE_PROJECT_ID    "Reference ID" del proyecto (Project Settings → General)
 # También puedes ejecutarla a mano: pestaña Actions → "Migraciones de Supabase" → Run workflow.
+#
+# Seguridad:
+#   · Solo corre desde main (también al lanzarla a mano) y nunca en pull
+#     requests: el código de un fork no llega a ver los secrets.
+#   · Cada secret se pasa solo a los pasos que lo usan, no a las actions de terceros.
+#   · Actions fijadas por SHA y versión exacta de la CLI de Supabase.
+#   · Environment "supabase-produccion": en Settings → Environments puedes exigir
+#     tu aprobación antes de cada migración y mover ahí los secrets.
 
 name: Migraciones de Supabase
 
@@ -26,15 +34,20 @@ permissions:
 jobs:
   migrate:
     name: Aplicar migraciones
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    env:
-      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-      SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+    timeout-minutes: 15
+    environment: supabase-produccion
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
 
       - name: Revisar que los secrets existen
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
         run: |
           missing=0
           for v in SUPABASE_ACCESS_TOKEN SUPABASE_DB_PASSWORD SUPABASE_PROJECT_ID; do
@@ -45,13 +58,17 @@ jobs:
           done
           exit $missing
 
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@1dedf2c611547ede7232d26866dd3c56ab903bbb # v1.7.3
         with:
-          version: latest
+          version: 2.122.0
 
       # Si un paso falla, sus últimas líneas se publican como anotación de
       # error (visibles en el resumen de la ejecución, sin abrir el registro).
       - name: Vincular el proyecto
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
         run: |
           set -o pipefail
           if ! supabase link --project-ref "$SUPABASE_PROJECT_ID" 2>&1 | tee link.log; then
@@ -60,6 +77,9 @@ jobs:
           fi
 
       - name: Ver qué se va a aplicar
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           set -o pipefail
           if ! supabase db push --dry-run 2>&1 | tee dry.log; then
@@ -68,6 +88,9 @@ jobs:
           fi
 
       - name: Aplicar migraciones nuevas
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           set -o pipefail
           if ! supabase db push --yes --skip-vault 2>&1 | tee push.log; then

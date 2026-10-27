@@ -8,6 +8,15 @@ import { EMPTY_FILTERS, type GeneratorFilters, type PerfumeClimate, type UUID, t
 
 const KEY = 'guardarropa:generator-filters';
 
+/** Al cerrar sesión: los filtros (id de prendas y estilos) son de esa cuenta. */
+export function forgetGeneratorFilters(): void {
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    /* ignorar */
+  }
+}
+
 export interface GeneratorState {
   filters: GeneratorFilters;
   /** Prendas fijadas antes de generar ("quiero usar esta camisa"). */

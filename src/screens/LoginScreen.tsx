@@ -54,7 +54,10 @@ export function LoginScreen() {
         <button className="btn primary big block" disabled={busy}>
           <LogIn /> {busy ? 'Entrando…' : 'Entrar'}
         </button>
-        <p className="muted tiny center">No hay registro público: la cuenta se crea desde el panel de Supabase.</p>
+        <p className="muted tiny center">
+          No hay registro público: la cuenta se crea desde el panel de Supabase. Si olvidas la contraseña, también se cambia ahí (README, «Si olvidas tu
+          contraseña»).
+        </p>
       </form>
     </div>
   );

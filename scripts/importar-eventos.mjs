@@ -31,34 +31,11 @@
 // está en el JSON no se toca.
 // ═══════════════════════════════════════════════════════════════════════════
 
-import { createClient } from '@supabase/supabase-js';
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { createInterface } from 'node:readline/promises';
-import { stdin, stdout } from 'node:process';
+import { fail, signInAsYou } from './lib/sesion.mjs';
 
 const norm = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’`]/g, "'").trim().toLowerCase();
-
-function fail(msg) {
-  console.error(`\n✖ ${msg}`);
-  process.exit(1);
-}
-
-/** Lee VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY del entorno o del .env. */
-function loadEnv() {
-  const env = { ...process.env };
-  if (existsSync('.env')) {
-    for (const line of readFileSync('.env', 'utf8').split(/\r?\n/)) {
-      const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
-      if (m && env[m[1]] === undefined) env[m[1]] = m[2].replace(/^["']|["']$/g, '');
-    }
-  }
-  const url = env.VITE_SUPABASE_URL?.trim();
-  const key = env.VITE_SUPABASE_ANON_KEY?.trim();
-  if (!url || !key) fail('Faltan VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY (ponlas en tu .env).');
-  if (key.startsWith('sb_secret_') || key.includes('service_role')) fail('Esa es una clave SECRETA. Usa la clave pública (anon / publishable).');
-  return { url, key };
-}
 
 // ─── 1. Leer y validar el JSON (antes de pedir credenciales) ───────────────
 
@@ -126,16 +103,7 @@ console.log(`✔ JSON válido: ${events.length} eventos, ${events.reduce((n, e) 
 
 // ─── 2. Iniciar sesión como tú ─────────────────────────────────────────────
 
-const { url, key } = loadEnv();
-const supabase = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
-const rl = createInterface({ input: stdin, output: stdout });
-const email = process.env.GUARDARROPA_EMAIL || (await rl.question('Correo: '));
-const password = process.env.GUARDARROPA_PASSWORD || (await rl.question('Contraseña (se verá en pantalla): '));
-rl.close();
-const { data: auth, error: authError } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
-if (authError) fail(`No se pudo iniciar sesión: ${authError.message}`);
-const uid = auth.user.id;
-console.log(`✔ Sesión iniciada como ${auth.user.email}\n`);
+const { supabase, uid } = await signInAsYou();
 
 async function load(table) {
   const out = [];

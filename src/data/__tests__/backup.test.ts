@@ -1,5 +1,44 @@
 import { describe, expect, it } from 'vitest';
-import { remapIds } from '../backup';
+import { imageTypeOf, isSafePhotoPath, remapIds } from '../backup';
+
+describe('respaldo: fotos que vienen en el archivo', () => {
+  it('acepta solo rutas con la forma que genera la app', () => {
+    for (const ok of [
+      'garments/0f8fad5b-d9cb-469f-a165-70867728950e-1761600000000.webp',
+      'garments/0f8fad5b-d9cb-469f-a165-70867728950e-1761600000000_thumb.webp',
+      'garments/vieja.jpg',
+      'outfits/7c9e6679-7425-40de-944b-e07fc1f90ae7/16fd2706-8baf-433b-82eb-8c7fada847da.webp',
+    ]) {
+      expect(isSafePhotoPath(ok), ok).toBe(true);
+    }
+    for (const bad of [
+      '',
+      '../x.webp',
+      'garments/../../otro-usuario/x.webp',
+      '/garments/x.webp',
+      'garments/sub/x.webp',
+      'otra-carpeta/x.webp',
+      'garments/x.svg',
+      'garments/x.webp.html',
+      'garments/x .webp',
+      'garments/x%2F..%2Fy.webp',
+      'outfits/x.webp',
+    ]) {
+      expect(isSafePhotoPath(bad), bad).toBe(false);
+    }
+  });
+
+  it('reconoce WebP y JPEG por su contenido, no por el nombre', () => {
+    const bytes = (...parts: (string | number[])[]) =>
+      new Uint8Array(parts.flatMap((p) => (typeof p === 'string' ? [...p].map((c) => c.charCodeAt(0)) : p)));
+    expect(imageTypeOf(bytes('RIFF', [0x24, 0, 0, 0], 'WEBPVP8 '))).toBe('image/webp');
+    expect(imageTypeOf(bytes([0xff, 0xd8, 0xff, 0xe0, 0, 0x10]))).toBe('image/jpeg');
+    expect(imageTypeOf(bytes('<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>'))).toBeNull();
+    expect(imageTypeOf(bytes('<html><script>alert(1)</script></html>'))).toBeNull();
+    expect(imageTypeOf(bytes('RIFF', [0, 0, 0, 0], 'WAVE'))).toBeNull();
+    expect(imageTypeOf(new Uint8Array())).toBeNull();
+  });
+});
 
 describe('respaldo: reasignación de id al restaurar', () => {
   const u = 'user-1';

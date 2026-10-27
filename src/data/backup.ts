@@ -32,6 +32,26 @@ interface BackupData {
 /** Quita la carpeta del usuario: "uid/garments/x.webp" → "garments/x.webp". */
 const relative = (path: string) => path.split('/').slice(1).join('/');
 
+/**
+ * Forma de las rutas que genera la app (ver photos.ts), sin la carpeta del
+ * usuario: "garments/<id>-<marca>[_thumb].webp" u
+ * "outfits/<outfit>/<id>[_thumb].webp". Un respaldo es un archivo que viene
+ * de fuera: cualquier otra ruta se descarta.
+ */
+const PHOTO_PATH = /^(garments\/[\w-]+|outfits\/[\w-]+\/[\w-]+)\.(webp|jpe?g)$/;
+
+export function isSafePhotoPath(rel: string): boolean {
+  return PHOTO_PATH.test(rel);
+}
+
+/** Tipo real de la imagen según sus primeros bytes (el nombre del archivo no es confiable). */
+export function imageTypeOf(bytes: Uint8Array): 'image/webp' | 'image/jpeg' | null {
+  const ascii = (from: number, to: number) => String.fromCharCode(...bytes.subarray(from, to));
+  if (bytes.length >= 12 && ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP') return 'image/webp';
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
+  return null;
+}
+
 function allPhotoPaths(tables: BackupData['tables']): string[] {
   const out = new Set<string>();
   for (const g of (tables.garments ?? []) as { photo_path?: string | null }[]) {
@@ -158,9 +178,11 @@ export async function importBackup(file: Blob, replace: boolean, progress: Progr
   const data = JSON.parse(await json.async('string')) as BackupData;
   if (data.format !== FORMAT) throw new Error('El archivo no es un respaldo de Guardarropa.');
   if (data.version > VERSION) throw new Error('El respaldo es de una versión más nueva de la app.');
+  if (!data.tables || typeof data.tables !== 'object') throw new Error('El respaldo está dañado (faltan las tablas).');
 
   const uid = getUserId();
-  const toMine = (path: string) => `${uid}/${relative(path)}`;
+  /** Lleva la ruta a la carpeta del usuario actual; null si no tiene la forma esperada. */
+  const toMine = (path: unknown) => (typeof path === 'string' && isSafePhotoPath(relative(path)) ? `${uid}/${relative(path)}` : null);
   const db = getDB();
 
   if (replace) {
@@ -184,7 +206,7 @@ export async function importBackup(file: Blob, replace: boolean, progress: Progr
     const fixed = rows.map((r) => {
       const row: Record<string, unknown> = { ...r, user_id: uid, deleted_at: null };
       if (t === 'garments' && typeof row.photo_path === 'string') row.photo_path = toMine(row.photo_path);
-      if (t === 'outfits' && Array.isArray(row.photo_paths)) row.photo_paths = (row.photo_paths as string[]).map(toMine);
+      if (t === 'outfits' && Array.isArray(row.photo_paths)) row.photo_paths = row.photo_paths.map(toMine).filter((p): p is string => p !== null);
       return row;
     });
     for (let i = 0; i < fixed.length; i += 500) await saveRows(t, fixed.slice(i, i + 500) as never);
@@ -197,10 +219,12 @@ export async function importBackup(file: Blob, replace: boolean, progress: Progr
   for (const entry of entries) {
     progress(`Fotos ${photos + missing + 1} de ${entries.length}…`);
     const rel = entry.name.slice('photos/'.length);
-    const type = rel.endsWith('.webp') ? 'image/webp' : 'image/jpeg';
     try {
-      const blob = new Blob([await entry.async('arraybuffer')], { type });
-      await storeRawPhoto(`${uid}/${rel}`, blob);
+      if (!isSafePhotoPath(rel)) throw new Error('Ruta de foto no válida');
+      const bytes = new Uint8Array(await entry.async('arraybuffer'));
+      const type = imageTypeOf(bytes);
+      if (!type) throw new Error('No es una imagen JPEG ni WebP');
+      await storeRawPhoto(`${uid}/${rel}`, new Blob([bytes], { type }));
       photos++;
     } catch {
       missing++;

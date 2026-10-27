@@ -199,7 +199,7 @@ function TypesTab() {
         const list = idx.catalog.types.filter((t) => t.position_id === p.id);
         return (
           <div key={p.id} className="stack" style={{ gap: 6 }}>
-            <h3>{p.name}</h3>
+            <h2>{p.name}</h2>
             {list.length === 0 ? (
               <p className="hint">Sin tipos.</p>
             ) : (

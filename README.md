@@ -19,7 +19,7 @@ con Supabase cuando vuelve internet.
 
 1. [Crear el proyecto en Supabase y obtener las claves](#paso-1-crear-el-proyecto-en-supabase-y-obtener-las-claves)
 2. [Aplicar las migraciones, desactivar el registro y crear tu usuario](#paso-2-aplicar-las-migraciones-desactivar-el-registro-público-y-crear-tu-usuario)
-3. [Subir el código a un repositorio privado de GitHub](#paso-3-subir-el-código-a-un-repositorio-privado-de-github)
+3. [Subir el código a tu repositorio de GitHub](#paso-3-subir-el-código-a-tu-repositorio-de-github)
 4. [Configurar los GitHub Secrets](#paso-4-configurar-los-github-secrets-y-aplicar-las-migraciones)
 5. [Conectar el repositorio a Vercel](#paso-5-conectar-el-repositorio-a-vercel)
 6. [Actualizaciones futuras](#paso-6-actualizaciones-futuras)
@@ -27,6 +27,8 @@ con Supabase cuando vuelve internet.
 8. [Desarrollo en tu computadora](#desarrollo-en-tu-computadora)
 9. [Cómo funciona por dentro](#cómo-funciona-por-dentro)
 10. [Seguridad y privacidad](#seguridad-y-privacidad)
+11. [Contribuir](#contribuir)
+12. [Licencia](#licencia)
 
 > ℹ️ Los paneles de Supabase, GitHub y Vercel cambian de vez en cuando. Si un
 > botón no se llama exactamente igual, busca uno parecido en la misma sección.
@@ -104,16 +106,18 @@ La primera vez que inicies sesión, la app crea sola tus posiciones, tipos, esti
 
 ---
 
-## Paso 3. Subir el código a un repositorio privado de GitHub
+## Paso 3. Subir el código a tu repositorio de GitHub
 
-**Si ya tienes este código en tu GitHub** (por ejemplo, en una rama creada por Claude):
+El repositorio puede ser **privado o público**: ninguna clave vive en el código (todas van en GitHub Secrets y en Vercel) y la CI no usa secretos, así que los *pull requests* de forks no los ven. Si lo haces público, en cuanto cambies la visibilidad activa en *Settings → Advanced Security* (antes *Code security*) el **Secret scanning** con **Push protection**, el **Private vulnerability reporting** (ver [`SECURITY.md`](SECURITY.md)) y **CodeQL**: en el plan gratuito de GitHub esas opciones solo existen para repositorios públicos.
 
-1. Asegúrate de que el repositorio es **privado**: *Settings → General → Danger Zone → Change repository visibility → Private*.
+**Si ya tienes este código en tu GitHub** (por ejemplo, un fork o una rama creada por Claude):
+
+1. Revisa la visibilidad en *Settings → General → Danger Zone → Change repository visibility*.
 2. Abre un *Pull Request* de la rama hacia `main` y fusiónalo (**Merge**). Vercel y la Action trabajan sobre `main`.
 
 **Si partes de cero:**
 
-1. En GitHub: **New repository** → nombre → **Private** → *Create repository* (sin README).
+1. En GitHub: **New repository** → nombre → visibilidad (**Private** si no quieres compartirlo) → *Create repository* (sin README).
 2. En tu computadora, dentro de la carpeta del proyecto:
    ```bash
    git init
@@ -147,7 +151,9 @@ La Action [`.github/workflows/supabase-migrations.yml`](.github/workflows/supaba
 4. Espera la palomita verde ✅. Si sale ❌, abre el paso que falló: el mensaje dice qué secreto falta o qué salió mal.
 
 > Los *secrets* no se ven en los registros ni en el código; GitHub los oculta automáticamente.
-> También hay una segunda Action, **CI**, que en cada cambio revisa tipos, pruebas, que compile y que no se haya subido ningún `.env` ni clave por error.
+> También hay una segunda Action, **CI**, que en cada cambio revisa tipos, pruebas, que compile, el aislamiento entre usuarios (RLS), las dependencias de producción y que no se haya subido ningún `.env` ni clave por error (también en el historial, con gitleaks).
+>
+> Las migraciones solo se aplican desde `main`. El job usa el *environment* `supabase-produccion`: en *Settings → Environments* puedes exigir tu aprobación antes de cada migración y mover ahí los tres secretos.
 
 ---
 
@@ -165,7 +171,7 @@ La Action [`.github/workflows/supabase-migrations.yml`](.github/workflows/supaba
 
 5. **Deploy**. En 1–2 minutos tendrás una URL tipo `https://tu-app.vercel.app`.
 6. En Vercel → *Settings → Git*, verifica que la **Production Branch** sea `main`. Desde ahora cada `git push` a `main` publica una versión nueva automáticamente.
-7. (Recomendado) En Supabase → *Authentication → URL Configuration*, pon tu URL de Vercel como **Site URL**.
+7. En Supabase → *Authentication → URL Configuration*, pon tu URL de Vercel como **Site URL** (por defecto es `localhost`, y ahí llevarían los correos de Supabase). En *Redirect URLs* deja solo tus URL exactas, sin comodines amplios.
 
 **Instalarla en el celular:**
 - **iPhone (Safari):** abre la URL → botón *Compartir* → **Agregar a pantalla de inicio**.
@@ -211,6 +217,29 @@ Lo que protege tus datos es **RLS** + tu contraseña. Aun así, si algo se filtr
 
 Si la clave llegó a un commit: **primero rota**, después (opcional) limpia el historial con [`git filter-repo`](https://github.com/newren/git-filter-repo) y activa *Settings → Code security → Secret scanning* en GitHub.
 
+### Si olvidas tu contraseña
+
+La app no tiene pantalla de recuperación por correo: el enlace que manda Supabase lleva a la *Site URL* (por defecto `localhost`) y la app no lo procesa. Cámbiala desde el panel:
+
+1. Supabase → **SQL Editor → New query**, con tu correo y una contraseña nueva **larga**:
+   ```sql
+   update auth.users
+   set encrypted_password = extensions.crypt('TU_NUEVA_CONTRASEÑA', extensions.gen_salt('bf')),
+       updated_at = now()
+   where email = 'tu-correo@ejemplo.com';
+   ```
+2. **Run** → debe decir `1 row affected` (si dice `0`, revisa el correo en *Authentication → Users*).
+3. Borra esa consulta del historial del SQL Editor: la contraseña quedó escrita en ella.
+4. Entra a la app con la contraseña nueva.
+
+Cambiar la contraseña así **no** cierra las sesiones abiertas en otros dispositivos. Si la cambias porque alguien más pudo conocerla, ciérralas todas (después tendrás que volver a entrar en cada dispositivo):
+
+```sql
+delete from auth.sessions where user_id = (select id from auth.users where email = 'tu-correo@ejemplo.com');
+```
+
+Aunque no uses la recuperación por correo, pon tu URL de Vercel como **Site URL** ([paso 5](#paso-5-conectar-el-repositorio-a-vercel)) y no agregues comodines amplios (como `https://*.vercel.app/**`) en *Redirect URLs*: cualquiera puede pedir un correo de recuperación para tu dirección, y el enlace solo debe llevar a tu app.
+
 ---
 
 ## Desarrollo en tu computadora
@@ -226,7 +255,8 @@ npm run dev               # abre http://localhost:5173
 | Comando | Qué hace |
 |---|---|
 | `npm run dev` | Servidor de desarrollo |
-| `npm test` | Pruebas unitarias (generador, compatibilidad, análisis, cesto, respaldo) |
+| `npm test` | Pruebas unitarias (generador, compatibilidad, análisis, cesto, respaldo, cabeceras de seguridad) |
+| `npm run test:rls` | Aplica las migraciones en un Postgres desechable (Docker, sin red) y prueba que un usuario no pueda leer ni modificar datos de otro |
 | `npm run typecheck` | Revisa tipos de TypeScript |
 | `npm run lint` | Revisión de estilo (oxlint) |
 | `npm run build` | Compila la versión de producción en `dist/` |
@@ -274,7 +304,11 @@ src/
   app/           Sesión, tema, estado del generador, rutas
 supabase/
   migrations/    Esquema versionado (se aplica con la GitHub Action)
-docs/DISENO.md   Propuesta de diseño
+  rls-tests/     Prueba de aislamiento entre usuarios (npm run test:rls)
+scripts/         Importadores (lib/ comparte el inicio de sesión) y probar-rls.mjs
+docs/
+  DISENO.md        Propuesta de diseño
+  THREAT_MODEL.md  Modelo de amenazas
 ```
 
 ---
@@ -303,9 +337,24 @@ Detalle completo en [`docs/DISENO.md`](docs/DISENO.md).
 - ✅ Ninguna URL, clave ni contraseña en el código ni en el historial: todo por variables de entorno y GitHub Secrets.
 - ✅ `.env` en `.gitignore` desde el primer commit; la Action **CI** falla si se sube uno o si detecta una clave.
 - ✅ La app solo usa la clave pública y **se niega a arrancar** con una clave `service_role`/`secret`.
-- ✅ **RLS** en todas las tablas: cada usuario solo ve y modifica sus filas (y las claves foráneas compuestas impiden referenciar datos de otro).
+- ✅ **RLS** en todas las tablas: cada usuario solo ve y modifica sus filas (y las claves foráneas compuestas impiden referenciar datos de otro). `npm run test:rls` lo comprueba en cada cambio.
 - ✅ Fotos en un bucket **privado**, por carpeta de usuario, servidas con **URL firmadas** de 1 hora.
 - ✅ Sin registro público: la cuenta se crea a mano en Supabase.
-- ✅ Cabeceras de seguridad en Vercel (CSP, HSTS, `X-Frame-Options`, etc.). Si algún día usas un dominio propio para Supabase, agrégalo a `connect-src` en `vercel.json`.
+- ✅ Cabeceras de seguridad en Vercel (CSP estricta sin `unsafe-inline`, HSTS, `X-Frame-Options`, `Cross-Origin-Opener-Policy`, etc.). Si algún día usas un dominio propio para Supabase, agrégalo a `connect-src` en `vercel.json`; si usas Supabase Realtime, agrega también `wss://*.supabase.co`.
 - ✅ Al cerrar sesión se borra la copia local del dispositivo.
 - ✅ Los datos de ejemplo son 100 % ficticios.
+- ✅ Workflows con permisos mínimos, actions fijadas por SHA y Dependabot para mantener al día dependencias y actions.
+
+Modelo de amenazas completo: [`docs/THREAT_MODEL.md`](docs/THREAT_MODEL.md). Para reportar una vulnerabilidad: [`SECURITY.md`](SECURITY.md).
+
+---
+
+## Contribuir
+
+Lee [`CONTRIBUTING.md`](CONTRIBUTING.md): cómo preparar el entorno, las convenciones del código y lo que revisa la CI.
+
+---
+
+## Licencia
+
+[MIT](LICENSE): puedes usar, copiar, modificar y distribuir el código, incluso con fines comerciales, siempre que conserves el aviso de copyright y la licencia. Se ofrece sin garantía.

@@ -8,6 +8,12 @@
 # ─── Datos personales (inventarios para importar) ───────
 datos-privados/
 inventario*.csv
+# Respaldos exportados desde la app: incluyen tus datos y fotos.
+guardarropa-respaldo-*.zip
+
+# ─── Informes de auditoría (pueden describir riesgos abiertos) ──
+/SECURITY_AUDIT_REPORT.md
+/RELEASE_READINESS.md
 
 # ─── Dependencias y builds ───────────────────────────────
 node_modules/
