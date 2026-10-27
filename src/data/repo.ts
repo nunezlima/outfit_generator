@@ -26,6 +26,7 @@ import type {
   Style,
   UserPrefs,
   UUID,
+  WearLogEntry,
 } from '../domain/types';
 import { getDB, getUserId, localKeyOf, rowKey, type FailedOp, type OutboxOp, type RowByTable, type TableName } from './db';
 import { removePhoto, storeNewPhoto } from './photos';
@@ -145,10 +146,12 @@ export async function markWorn(garmentIds: UUID[], wornOn: string = todayISO(), 
   const garments = (await db.garments.bulkGet(garmentIds)).filter((g): g is Garment => !!g);
   const outcomes = garments.map(applyWear);
   // El perfume solo se guarda si sigue existiendo (si no, la base lo rechazaría).
+  // Sin perfume no se manda la columna: así "Lo usé hoy" funciona aunque el
+  // servidor aún no tenga la migración de perfumes.
   const perfume = perfumeId ? await db.perfumes.get(perfumeId) : undefined;
-  await saveRows('wear_log', [
-    { ...baseRow(), id: newId(), worn_on: wornOn, garment_ids: garments.map((g) => g.id), outfit_id: outfitId, perfume_id: perfume ? perfume.id : null },
-  ]);
+  const entry: WearLogEntry = { ...baseRow(), id: newId(), worn_on: wornOn, garment_ids: garments.map((g) => g.id), outfit_id: outfitId };
+  if (perfume) entry.perfume_id = perfume.id;
+  await saveRows('wear_log', [entry]);
   await saveRows('garments', outcomes.map((o) => o.garment));
   return outcomes.filter((o) => o.movedToLaundry).map((o) => o.garment);
 }
