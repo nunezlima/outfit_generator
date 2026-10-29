@@ -2,24 +2,24 @@
    Guardarropa · estilos globales (mobile-first, modo claro y oscuro)
    ═══════════════════════════════════════════════════════════════════════ */
 
-/* Estilo brutalista: bordes de tinta gruesos, sombras duras desplazadas,
-   esquinas rectas y tipografía gruesa. --ink es el color de bordes y
-   sombras; --paper, el del papel sobre el que se apoyan. */
+/* Estilo Soft UI: superficies sin bordes con profundidad suave (sombras en
+   capas), esquinas muy redondeadas, botones en píldora y movimiento breve.
+   --border queda como línea tenue para separar filas; --well es el fondo hundido de los campos. */
 :root {
   color-scheme: light;
-  --bg: #f3e8d5;
-  --surface: #fffaf0;
-  --surface-2: #efe0c6;
-  --surface-3: #e6d2b0;
-  --text: #111111;
-  --text-muted: #3b3124;
-  --border: #111111;
-  --ink: #111111;
-  --paper: #fffaf0;
+  --bg: #f2ebe3;
+  --surface: #fbf8f4;
+  --surface-2: #efe7dd;
+  --surface-3: #e6dccf;
+  --text: #1e1b18;
+  --text-muted: #6d655c;
+  --border: rgb(80 50 30 / 12%);
+  --well: #ece3d8;
+  --shadow-color: 80 50 30;
   --accent: #a84b24;
   --accent-hover: #933f1c;
   --accent-contrast: #ffffff;
-  --accent-soft: #fae6d9;
+  --accent-soft: #f6e2d6;
   --danger: #b42318;
   --danger-soft: #fde7e4;
   --success: #1f7a4d;
@@ -27,10 +27,10 @@
   --warning: #9a6200;
   --warning-soft: #fdf0d5;
   --info-soft: #e6eef9;
-  --shadow: 4px 4px 0 var(--ink);
-  --shadow-lg: 8px 8px 0 var(--ink);
-  --radius: 0px;
-  --radius-sm: 0px;
+  --shadow: 0 1px 2px rgb(var(--shadow-color) / 6%), 0 6px 14px rgb(var(--shadow-color) / 7%), 0 18px 38px rgb(var(--shadow-color) / 8%);
+  --shadow-lg: 0 24px 60px rgb(var(--shadow-color) / 20%);
+  --radius: 24px;
+  --radius-sm: 16px;
   --nav-h: 64px;
   --header-h: 56px;
   /* Ancho de la columna de contenido; cabecera, navegación y botones flotantes se alinean a ella. */
@@ -44,15 +44,15 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --bg: #15120e;
-    --surface: #1f1a14;
-    --surface-2: #2a231a;
-    --surface-3: #362d21;
-    --text: #f6eee0;
-    --text-muted: #c9bca6;
-    --border: #e9dcc5;
-    --ink: #e9dcc5;
-    --paper: #1f1a14;
+    --bg: #141210;
+    --surface: #1e1b18;
+    --surface-2: #28241f;
+    --surface-3: #332e28;
+    --text: #f3eee8;
+    --text-muted: #a89f94;
+    --border: rgb(255 255 255 / 9%);
+    --well: #191612;
+    --shadow-color: 0 0 0;
     --accent: #f0a27a;
     --accent-hover: #f5b896;
     --accent-contrast: #1c120c;
@@ -64,22 +64,22 @@
     --warning: #f4c46a;
     --warning-soft: #362a12;
     --info-soft: #1c2636;
-    --shadow: 4px 4px 0 var(--ink);
-    --shadow-lg: 8px 8px 0 var(--ink);
+    --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 16px rgb(0 0 0 / 25%);
+    --shadow-lg: 0 8px 40px rgb(0 0 0 / 55%);
   }
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #15120e;
-  --surface: #1f1a14;
-  --surface-2: #2a231a;
-  --surface-3: #362d21;
-  --text: #f6eee0;
-  --text-muted: #c9bca6;
-  --border: #e9dcc5;
-  --ink: #e9dcc5;
-  --paper: #1f1a14;
+  --bg: #141210;
+  --surface: #1e1b18;
+  --surface-2: #28241f;
+  --surface-3: #332e28;
+  --text: #f3eee8;
+  --text-muted: #a89f94;
+  --border: rgb(255 255 255 / 9%);
+  --well: #191612;
+  --shadow-color: 0 0 0;
   --accent: #f0a27a;
   --accent-hover: #f5b896;
   --accent-contrast: #1c120c;
@@ -91,8 +91,8 @@
   --warning: #f4c46a;
   --warning-soft: #362a12;
   --info-soft: #1c2636;
-  --shadow: 4px 4px 0 var(--ink);
-  --shadow-lg: 8px 8px 0 var(--ink);
+  --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 16px rgb(0 0 0 / 25%);
+  --shadow-lg: 0 8px 40px rgb(0 0 0 / 55%);
 }
 
 *,
@@ -1809,128 +1809,133 @@ a.list-item:active {
   letter-spacing: 0.05em;
 }
 
-/* ─── Brutalismo ─────────────────────────────────────────────────────────
-   Bloques con borde de tinta y sombra dura, esquinas rectas, mayúsculas
-   gruesas y cambios de estado instantáneos (sin transiciones suaves). */
-
-* {
-  transition: none !important;
-}
+/* ─── Soft UI ────────────────────────────────────────────────────────────
+   Las superficies se separan por profundidad, no por bordes. Los controles
+   responden al toque hundiéndose un poco, y las listas entran en cascada. */
 
 .card,
 .card-list,
 .garment-card,
 .sheet,
-.callout,
-.banner,
-.segmented,
-.number-stepper {
-  border: 3px solid var(--ink);
-  border-radius: 0;
+.callout {
+  border-color: transparent;
   box-shadow: var(--shadow);
 }
 
-.photo,
-.thumb,
-.swatch-btn,
-.badge,
-.chip,
-.icon-btn,
-.fab,
-.input,
-.select,
-.textarea,
-.segmented button,
-.matrix-cell,
-.sync-pill {
-  border-radius: 0;
+.card,
+.garment-card {
+  transition:
+    transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.28s;
 }
 
-.list-item {
-  border-bottom: 2px solid var(--ink);
+@media (hover: hover) {
+  .garment-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 8px rgb(var(--shadow-color, 0 0 0) / 8%), 0 22px 44px rgb(var(--shadow-color, 0 0 0) / 14%);
+  }
 }
 
-h1,
-h2,
-.section-title {
-  text-transform: uppercase;
-  font-weight: 900;
-  letter-spacing: -0.01em;
-}
-
-.header {
-  background: var(--paper);
-  border-bottom: 3px solid var(--ink);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-.header h1 {
-  font-size: 1.45rem;
-}
-
-/* Los botones "se presionan": la sombra desaparece y el botón baja. */
 .btn {
-  border: 3px solid var(--ink);
-  border-radius: 0;
-  box-shadow: 3px 3px 0 var(--ink);
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.btn:active {
-  transform: translate(3px, 3px);
-  box-shadow: none;
+  border-radius: 999px;
+  border-color: transparent;
+  box-shadow: 0 2px 6px rgb(var(--shadow-color, 0 0 0) / 10%);
+  transition: transform 0.16s cubic-bezier(0.3, 0.7, 0.4, 1.5), box-shadow 0.16s;
 }
 
 .btn.primary {
-  background: var(--accent);
-  color: var(--accent-contrast);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.btn:active,
+.icon-btn:active,
+.chip:active,
+.garment-card:active {
+  transform: scale(0.95);
 }
 
 .chip {
-  border: 2px solid var(--ink);
-  font-weight: 700;
+  border-color: transparent;
+  box-shadow: 0 1px 3px rgb(var(--shadow-color, 0 0 0) / 12%);
+  transition: transform 0.16s;
 }
 
 .chip.on {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--paper);
+  border-color: transparent;
+}
+
+.input,
+.select,
+.textarea,
+.segmented,
+.number-stepper {
+  border-color: transparent;
+  background: var(--well);
+  box-shadow: inset 0 2px 5px rgb(var(--shadow-color, 0 0 0) / 9%);
 }
 
 .input,
 .select,
 .textarea {
-  border: 2px solid var(--ink);
+  border-radius: 16px;
 }
 
+/* Navegación flotante. */
 .bottom-nav {
-  background: var(--paper);
-  border-top: 3px solid var(--ink);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+  left: 12px;
+  right: 12px;
+  bottom: calc(10px + var(--safe-bottom));
+  height: var(--nav-h);
+  padding-bottom: 0;
+  border: 0;
+  border-radius: 24px;
+  box-shadow: 0 10px 30px rgb(var(--shadow-color, 0 0 0) / 18%);
 }
 
-.bottom-nav a {
-  color: var(--text);
-  font-weight: 800;
-  text-transform: uppercase;
+.main {
+  padding-bottom: calc(var(--nav-h) + var(--safe-bottom) + 34px);
 }
 
-.bottom-nav a.active {
-  background: var(--accent);
-  color: var(--accent-contrast);
+.header {
+  border-bottom: 0;
+  box-shadow: 0 6px 18px rgb(var(--shadow-color, 0 0 0) / 6%);
 }
 
-.bottom-nav a.active::before {
-  display: none;
+@keyframes aparecer {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
 }
 
-.fab {
-  border: 3px solid var(--ink);
-  box-shadow: var(--shadow);
+.garment-card,
+.outfit-item,
+.card-list > * {
+  animation: aparecer 0.42s cubic-bezier(0.3, 0.7, 0.4, 1.3) both;
+}
+
+.garment-card:nth-child(2),
+.outfit-item:nth-child(2),
+.card-list > :nth-child(2) {
+  animation-delay: 50ms;
+}
+
+.garment-card:nth-child(3),
+.outfit-item:nth-child(3),
+.card-list > :nth-child(3) {
+  animation-delay: 100ms;
+}
+
+.garment-card:nth-child(4),
+.outfit-item:nth-child(4),
+.card-list > :nth-child(4) {
+  animation-delay: 150ms;
+}
+
+.garment-card:nth-child(n + 5),
+.outfit-item:nth-child(n + 5),
+.card-list > :nth-child(n + 5) {
+  animation-delay: 200ms;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -19,7 +19,7 @@ export function applyTheme(choice: ThemeChoice = read()): void {
   if (choice === 'system') root.removeAttribute('data-theme');
   else root.setAttribute('data-theme', choice);
   const dark = choice === 'dark' || (choice === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#15120e' : '#f3e8d5');
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#141210' : '#f2ebe3');
 }
 
 export function useTheme(): [ThemeChoice, (t: ThemeChoice) => void] {
