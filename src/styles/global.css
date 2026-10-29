@@ -2,24 +2,19 @@
    Guardarropa · estilos globales (mobile-first, modo claro y oscuro)
    ═══════════════════════════════════════════════════════════════════════ */
 
-/* Estilo brutalista: bordes de tinta gruesos, sombras duras desplazadas,
-   esquinas rectas y tipografía gruesa. --ink es el color de bordes y
-   sombras; --paper, el del papel sobre el que se apoyan. */
 :root {
   color-scheme: light;
-  --bg: #f3e8d5;
-  --surface: #fffaf0;
-  --surface-2: #efe0c6;
-  --surface-3: #e6d2b0;
-  --text: #111111;
-  --text-muted: #3b3124;
-  --border: #111111;
-  --ink: #111111;
-  --paper: #fffaf0;
+  --bg: #f6f3ee;
+  --surface: #ffffff;
+  --surface-2: #efebe4;
+  --surface-3: #e5dfd5;
+  --text: #1e1b18;
+  --text-muted: #6d655c;
+  --border: #e2dcd2;
   --accent: #a84b24;
   --accent-hover: #933f1c;
   --accent-contrast: #ffffff;
-  --accent-soft: #fae6d9;
+  --accent-soft: #f6e2d6;
   --danger: #b42318;
   --danger-soft: #fde7e4;
   --success: #1f7a4d;
@@ -27,10 +22,10 @@
   --warning: #9a6200;
   --warning-soft: #fdf0d5;
   --info-soft: #e6eef9;
-  --shadow: 4px 4px 0 var(--ink);
-  --shadow-lg: 8px 8px 0 var(--ink);
-  --radius: 0px;
-  --radius-sm: 0px;
+  --shadow: 0 1px 2px rgb(30 27 24 / 6%), 0 4px 16px rgb(30 27 24 / 6%);
+  --shadow-lg: 0 8px 40px rgb(30 27 24 / 18%);
+  --radius: 14px;
+  --radius-sm: 10px;
   --nav-h: 64px;
   --header-h: 56px;
   /* Ancho de la columna de contenido; cabecera, navegación y botones flotantes se alinean a ella. */
@@ -44,15 +39,13 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --bg: #15120e;
-    --surface: #1f1a14;
-    --surface-2: #2a231a;
-    --surface-3: #362d21;
-    --text: #f6eee0;
-    --text-muted: #c9bca6;
-    --border: #e9dcc5;
-    --ink: #e9dcc5;
-    --paper: #1f1a14;
+    --bg: #141210;
+    --surface: #1e1b18;
+    --surface-2: #28241f;
+    --surface-3: #332e28;
+    --text: #f3eee8;
+    --text-muted: #a89f94;
+    --border: #36312b;
     --accent: #f0a27a;
     --accent-hover: #f5b896;
     --accent-contrast: #1c120c;
@@ -64,22 +57,20 @@
     --warning: #f4c46a;
     --warning-soft: #362a12;
     --info-soft: #1c2636;
-    --shadow: 4px 4px 0 var(--ink);
-    --shadow-lg: 8px 8px 0 var(--ink);
+    --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 16px rgb(0 0 0 / 25%);
+    --shadow-lg: 0 8px 40px rgb(0 0 0 / 55%);
   }
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #15120e;
-  --surface: #1f1a14;
-  --surface-2: #2a231a;
-  --surface-3: #362d21;
-  --text: #f6eee0;
-  --text-muted: #c9bca6;
-  --border: #e9dcc5;
-  --ink: #e9dcc5;
-  --paper: #1f1a14;
+  --bg: #141210;
+  --surface: #1e1b18;
+  --surface-2: #28241f;
+  --surface-3: #332e28;
+  --text: #f3eee8;
+  --text-muted: #a89f94;
+  --border: #36312b;
   --accent: #f0a27a;
   --accent-hover: #f5b896;
   --accent-contrast: #1c120c;
@@ -91,8 +82,8 @@
   --warning: #f4c46a;
   --warning-soft: #362a12;
   --info-soft: #1c2636;
-  --shadow: 4px 4px 0 var(--ink);
-  --shadow-lg: 8px 8px 0 var(--ink);
+  --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 4px 16px rgb(0 0 0 / 25%);
+  --shadow-lg: 0 8px 40px rgb(0 0 0 / 55%);
 }
 
 *,
@@ -1807,130 +1798,6 @@ a.list-item:active {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-}
-
-/* ─── Brutalismo ─────────────────────────────────────────────────────────
-   Bloques con borde de tinta y sombra dura, esquinas rectas, mayúsculas
-   gruesas y cambios de estado instantáneos (sin transiciones suaves). */
-
-* {
-  transition: none !important;
-}
-
-.card,
-.card-list,
-.garment-card,
-.sheet,
-.callout,
-.banner,
-.segmented,
-.number-stepper {
-  border: 3px solid var(--ink);
-  border-radius: 0;
-  box-shadow: var(--shadow);
-}
-
-.photo,
-.thumb,
-.swatch-btn,
-.badge,
-.chip,
-.icon-btn,
-.fab,
-.input,
-.select,
-.textarea,
-.segmented button,
-.matrix-cell,
-.sync-pill {
-  border-radius: 0;
-}
-
-.list-item {
-  border-bottom: 2px solid var(--ink);
-}
-
-h1,
-h2,
-.section-title {
-  text-transform: uppercase;
-  font-weight: 900;
-  letter-spacing: -0.01em;
-}
-
-.header {
-  background: var(--paper);
-  border-bottom: 3px solid var(--ink);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-.header h1 {
-  font-size: 1.45rem;
-}
-
-/* Los botones "se presionan": la sombra desaparece y el botón baja. */
-.btn {
-  border: 3px solid var(--ink);
-  border-radius: 0;
-  box-shadow: 3px 3px 0 var(--ink);
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.btn:active {
-  transform: translate(3px, 3px);
-  box-shadow: none;
-}
-
-.btn.primary {
-  background: var(--accent);
-  color: var(--accent-contrast);
-}
-
-.chip {
-  border: 2px solid var(--ink);
-  font-weight: 700;
-}
-
-.chip.on {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--paper);
-}
-
-.input,
-.select,
-.textarea {
-  border: 2px solid var(--ink);
-}
-
-.bottom-nav {
-  background: var(--paper);
-  border-top: 3px solid var(--ink);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-}
-
-.bottom-nav a {
-  color: var(--text);
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.bottom-nav a.active {
-  background: var(--accent);
-  color: var(--accent-contrast);
-}
-
-.bottom-nav a.active::before {
-  display: none;
-}
-
-.fab {
-  border: 3px solid var(--ink);
-  box-shadow: var(--shadow);
 }
 
 @media (prefers-reduced-motion: reduce) {
