@@ -18,14 +18,14 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.118.0",
+    "@supabase/supabase-js": "^2.119.0",
     "dexie": "^4.4.7",
     "dexie-react-hooks": "^4.4.0",
     "jszip": "^3.10.2",
-    "lucide-react": "^1.61.0",
+    "lucide-react": "^1.70.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "react-router-dom": "^7.18.4"
+    "react-router-dom": "^7.18.5"
   },
   "devDependencies": {
     "@types/node": "^24.19.0",
